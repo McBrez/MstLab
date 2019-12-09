@@ -56,9 +56,10 @@ class Sentinel:
             return
 
         # Start data aquisition thread.
-        self.dataAquisition = \
-            DataAquisition(configTree,
+        self.dataAquisition = DataAquisition(
+            configTree,
             self.databaseInterface.storeFunction)
+        self.dataAquisition.start()
 
         # Start networking
 
