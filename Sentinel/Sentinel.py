@@ -8,7 +8,13 @@ Date: DEC 2019
 # Project imports
 from SentinelConfig import SentinelConfig
 from DatabaseInterface import DatabaseInterface
-from DataAquisition import DataAquisition
+#from DataAquisition import DataAquisition
+
+
+
+from datetime import datetime
+from time import sleep
+
 
 class Sentinel:
 
@@ -54,7 +60,20 @@ class Sentinel:
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
             return
-        
+
+        timestamp = datetime.now()
+        valueCache = {}
+        valueCache['TestConfig_TestMeasurement1'] = {}
+        valueCache['TestConfig_TestMeasurement1'][timestamp] = 1.1
+        DatabaseInterface.storeFunction(valueCache)
+        sleep(1)
+
+        timestamp = datetime.now()
+        valueCache = {}
+        valueCache['TestConfig_TestMeasurement1'] = {}
+        valueCache['TestConfig_TestMeasurement1'][timestamp] = 2.2
+        DatabaseInterface.storeFunc(valueCache)
+
         # Start data aquisition thread.
         self.dataAquisition = \
             DataAquisition(configTree,

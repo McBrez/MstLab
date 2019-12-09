@@ -29,6 +29,17 @@ class SentinelConfig:
     # The XML tag, that specifies the Xpath to Measurement tag.
     XML_MEASUREMENT = "Measurement"
 
+    # The XML tag, that specifies the Xpath to Measurement tag.
+    XML_MEASUREMENT_SCAN_RATE = "ScanRate"
+
+    XML_MEASUREMENT_CONFIG_TAG = "ConfigTag"
+
+    XML_MEASUREMENT_CHANNEL = "Channels/Channel"
+
+    XML_MEASUREMENT_CHANNEL_TAG = "Tag"
+
+    XML_MEASUREMENT_CHANNEL_PORT = "Port"
+
     # The XLM tag, that specifies the channel tag.
     XML_MEASUREMENT_TAG = "./MeasurementConfig/Measurement/Channel/" 
 
