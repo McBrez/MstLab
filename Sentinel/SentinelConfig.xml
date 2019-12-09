@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+
+<SentinelConfig>
+    <DatabaseConfig>
+        <DatabaseName>sentinelDb.sl3</DatabaseName>
+        <AquisitionBufferSize>5000</AquisitionBufferSize>
+        <DatabaseWriteIntervall>1000</DatabaseWriteIntervall>
+    </DatabaseConfig>
+    <MeasurementConfig name = "TestConfig">
+        <ScanRate>1000</ScanRate>
+        <ConfigTag>1</ConfigTag> 
+        <Measurement name = "TestMeasurement1">
+            <Channels>
+                <Channel>
+                    <Tag>Ur2</Tag>
+                    <Port>1</Port>
+                </Channel>
+                <Channel>
+                    <Tag>Ur1</Tag>
+                    <Port>2</Port>
+                </Channel>
+            </Channels>
+            <Processing>Ur1-Ur2</Processing>
+        </Measurement>
+        <Measurement name = "TestMeasurement2">
+            <Channels>
+                <Channel>
+                    <Tag>Ur3</Tag>
+                    <Port>3</Port>
+                </Channel>
+            </Channels>
+            <Processing>Ur3</Processing>
+        </Measurement>
+    </MeasurementConfig>
+</SentinelConfig>
