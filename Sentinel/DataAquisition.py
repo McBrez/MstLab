@@ -60,7 +60,7 @@ class DataAquisition(threading.Thread):
         ### Tentative code ###
         self.channels = [0,1,2,3]
         self.samplesPerChannel = 0
-        self.scanMode = OptionFlags.Continuously
+        self.scanMode = OptionFlags.CONTINUOUS
         self.scanRate = 1000.0
         ### Tentative code end ###
 
@@ -138,7 +138,9 @@ class DataAquisition(threading.Thread):
 
             except KeyboardInterrupt:
                 # Clear the '^C' from the display.
-                print(CURSOR_BACK_2, ERASE_TO_END_OF_LINE, '\n')
+                print(
+                    DataAquisition.CURSOR_BACK_2,
+                    DataAquisition.ERASE_TO_END_OF_LINE, '\n')
         except (HatError, ValueError) as err:
             print('\n', err)
 
@@ -193,10 +195,10 @@ class DataAquisition(threading.Thread):
                         end='')
                 stdout.flush()
 
-                timestamp = datetime.now()
-                valueCache['TestConfig_TestMeasurement1'][timestamp] = \
-                    read_result.data[index]
-                self.storeFunc(valueCache)
+                timestamp = datetime.now().isoformat()
+                valueCache = {}
+                valueCache[timestamp] = read_result.data[index]
+                self.storeFunc('TestConfig_TestMeasurement1', valueCache)
                 sleep(0.1)
 
         print('\n')

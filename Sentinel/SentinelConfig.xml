@@ -9,27 +9,20 @@
     <MeasurementConfig name = "TestConfig">
         <ScanRate>1000</ScanRate>
         <ConfigTag>1</ConfigTag> 
-        <Measurement name = "TestMeasurement1">
-            <Channels>
-                <Channel>
-                    <Tag>Ur2</Tag>
-                    <Port>1</Port>
-                </Channel>
-                <Channel>
-                    <Tag>Ur1</Tag>
-                    <Port>2</Port>
-                </Channel>
-            </Channels>
-            <Processing>Ur1-Ur2</Processing>
-        </Measurement>
-        <Measurement name = "TestMeasurement2">
-            <Channels>
-                <Channel>
-                    <Tag>Ur3</Tag>
-                    <Port>3</Port>
-                </Channel>
-            </Channels>
-            <Processing>Ur3</Processing>
-        </Measurement>
+        <Channels>
+            <Channel>
+                <Tag>Ur1</Tag>
+                <Port>1</Port>
+            </Channel>
+            <Channel>
+                <Tag>Ur1</Tag>
+                <Port>2</Port>
+            </Channel>
+        </Channels>
+        <ProcessValues>
+            <ProcessValue name="VoltageCoil">
+                <Processing>Ur2-Ur1</Processing>
+            </ProcessValue>
+        </ProcessValues>
     </MeasurementConfig>
 </SentinelConfig>

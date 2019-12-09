@@ -88,7 +88,7 @@ class DatabaseInterface:
         """
         return False
 
-    def storeFunction(self, values):
+    def storeFunction(self, measurement, value):
         """
         Used to queue measurement values for storage to database.
 
@@ -100,8 +100,13 @@ class DatabaseInterface:
 
         # Aquire lock
         self.__writeSemaphore.acquire()
-        self.valueCache.append(values)
         
+        # Add dict to valueCache, if not already in valueCache
+        if measurement not in self.valueCache.keys():
+            self.valueCache[measurement] = {}
+        
+        self.valueCache[measurement].update(value)
+
         # Everything has been done. Releae lock.
         self.__writeSemaphore.release()
 
