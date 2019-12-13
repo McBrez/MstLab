@@ -1,0 +1,32 @@
+{
+    "DatabaseConfig" : {
+        "DatabaseName" : "sentinelDb.sl3",
+        "AquisitionBufferSize" : 300,
+        "DatabaseWriteIntervall" : 1000
+    },
+    "MeasurmentConfig" : [
+        {
+            "ConfigName" : "DefaultConfig",
+            "Channels" : {
+                "0" : "UR1",
+                "1" : "UR2"
+            },
+            "ScanRate" : 1000,
+            "Measurements" : {
+                "CurrentShunt" : "(UR1 - UR2) / 0.01",
+                "VoltageLever1" : "UR1 - UR2"
+            }
+        },
+        {
+            "ConfigName" : "Config2",
+            "Channels" : {
+                "0" : "UR3",
+                "1" : "UR4"
+            },
+            "ScanRate" : 2000,
+            "Measurements" : {
+                "VoltageCoil1" : "UR3 - UR4"
+            }
+        }
+    ] 
+}
