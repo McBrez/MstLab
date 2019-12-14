@@ -13,24 +13,20 @@ from DataAquisition import DataAquisition
 class Sentinel:
 
     # The name of the config file, that gets read in at start up.
-    CONFIG_FILE_NAME = "sentinelConfig.xml" 
+    CONFIG_FILE_NAME = "sentinelConfig.json" 
 
-    # The name of the databse, measurment values get written to.
-    DATABASE_FILE_NAME = "valueDB.sl3"
-
-    def __init__(self, configFile, databaseFile):
+    def __init__(self, configFile):
         """
-        Stores the paths of the XML config file and the name of the SQLite database file. Does not
-        start the object.
+        Stores the paths of the XML config file and the name of the SQLite 
+        database file. Does not start the object.
 
         Paramterers:
         configFile (string): Path to the XML config file.
-        databaseFile (string): Name of the SQlite databse file that shall be created.
+        databaseFile (string): Name of the SQlite databse file that shall be 
+        created.
         """
 
         self.configFile = configFile
-        self.databaseFile = databaseFile
-
         self.configObject = None
         self.databaseInterface = None
         self.dataAquisition = None
@@ -38,7 +34,8 @@ class Sentinel:
 
     def main(self):
         """
-        Main method of the class. Starts the sentinel and all of its sub objects.
+        Main method of the class. Starts the sentinel and all of its sub 
+        modules.
         """
 
         # Parse XML configuration file into a DataAquisitionConfig object.
@@ -46,10 +43,10 @@ class Sentinel:
         if(not self.configObject.isValid()):
             print("Could not read configuration file. Aborting.")
             return     
-        configTree = self.configObject.getConfigTree()
 
         # Start database interface
-        self.databaseInterface = DatabaseInterface(configTree)
+        self.databaseInterface = DatabaseInterface(
+            self.configObject.getConfig(SentinelConfig.JSON_DATABASE_CONFIG))
 
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
@@ -66,5 +63,5 @@ class Sentinel:
         # Endless loop
 
 if __name__ == '__main__':
-    mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME, Sentinel.DATABASE_FILE_NAME)
+    mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)
     mainClass.main()

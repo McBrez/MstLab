@@ -1,9 +1,9 @@
 """
-This program has been created as part of the MST lab lecture of  the institute of micromechanics 
-TU Wien.
-This script encapsulates an scqlite database to achieve data persistence. It also exposes an store 
-function, that can be called by the data aquisition module, that allows to dump the measurment 
-values.
+This program has been created as part of the MST lab lecture of  the institute
+of micromechanics TU Wien.
+This script encapsulates an scqlite database to achieve data persistence. It 
+also exposes an store function, that can be called by the data aquisition 
+module, that allows to dump the measurment values.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -35,19 +35,20 @@ class DatabaseInterface:
 
     def __init__(self, configObject):
         """
-        Constructs the database interface. Does not create a database or connect to it. Before this
-        object is operational, and data can be written to the database,  start() function has to be
+        Constructs the database interface. Does not create a database or connect
+        to it. Before this object is operational, and data can be written to the
+        database, start() function has to be
         called.
 
         Parameters:
-        configObject (SentinelConfig): Holds the configuration of for the database interface.
+        configObject (dict): The dict that SentinelConfig.GetConfig() returns.
         """
         
         self.configObject = configObject
         self.databaseName = \
-            str(configObject.findtext(SentinelConfig.XML_DATABASE_NAME))
+            str(configObject[SentinelConfig.JSON_DATABASE_NAME])
         self.bufferSize = \
-            int(configObject.findtext(SentinelConfig.XML_DATABASE_BUFFER_SIZE))
+            int(configObject[SentinelConfig.JSON_DATABASE_BUFFER_SIZE])
         self.storageIntervall = \
             int(configObject.findtext(SentinelConfig.XML_DATABASE_STORAGE_INTERVALL))
         
@@ -64,7 +65,8 @@ class DatabaseInterface:
     
     def start(self):
         """
-        Creates the database structure or connects to it, and starts worker threads.
+        Creates the database structure or connects to it, and starts worker 
+        threads.
 
         Returns:
         True if start was successfull. False otherwise.

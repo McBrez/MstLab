@@ -8,9 +8,10 @@ Author: David FREISMUTH
 Date: DEC 2019
 License: 
 """
-
+# Python imports
 import json
 import os
+import copy
 
 class SentinelConfig:
     """
@@ -18,50 +19,45 @@ class SentinelConfig:
     configurations file and retrieving configuration data.
     """
 
-    # Containts configuration keys and their representation in the JSON 
-    # configuration file. At __init__() of this object, the keys and their
-    # valus will be written as instance attributes to this object. 
-    __CONFIG_KEY_DICT = {
-        # Points to the root element of the Database configuration. Will return
-        # a dictionary containing the databse configurations.
-        "JSON_DATABASE_CONFIG" : "DatabaseConfig",
+    # Points to the root element of the Database configuration. Will return
+    # a dictionary containing the databse configurations.
+    JSON_DATABASE_CONFIG = "DatabaseConfig",
 
-        # The name of the database file, that will be created/connected to on
-        # startup.
-        "JSON_DATABASE_NAME" : "DatabaseName",
+    # The name of the database file, that will be created/connected to on
+    # startup.
+    JSON_DATABASE_NAME = "DatabaseName",
 
-        # The size of the acquisition buffer.
-        "JSON_ACQUISITION_BUFFER" : "AcquisitionBufferSize",
+    # The size of the acquisition buffer.
+    JSON_ACQUISITION_BUFFER = "AcquisitionBufferSize",
 
-        # How often the value cache is written back to database. Value is in 
-        # milli seconds.
-        "JSON_WRITE_INTERVALL" : "WriteIntervall",
+    # How often the value cache is written back to database. Value is in 
+    # milli seconds.
+    JSON_WRITE_INTERVALL = "WriteIntervall",
 
-        # Points to the Measurement configurations. Will return a list of
-        # dictionraries, containing measurement configurations.
-        "JSON_MEASUREMENT_CONFIG" : "MeasurmentConfig",
+    # Points to the Measurement configurations. Will return a list of
+    # dictionraries, containing measurement configurations.
+    JSON_MEASUREMENT_CONFIG = "MeasurmentConfig",
 
-        # The name of the measurment configuration.
-        "JSON_MEASUREMENT_NAME" : "ConfigName",
+    # The name of the measurment configuration.
+    JSON_MEASUREMENT_NAME = "ConfigName",
 
-        # The channels of the DAQ hardware, that shall be used. returns a 
-        # dictionary, that maps from channel number to channel tag.
-        "JSON_MEASUREMENT_CHANNELS" : "Channels",
+    # The channels of the DAQ hardware, that shall be used. returns a 
+    # dictionary, that maps from channel number to channel tag.
+    JSON_MEASUREMENT_CHANNELS = "Channels",
 
-        # The rate with which the values shall be sampled.
-        "JSON_MEASUREMENT_SCANRATE" : "ScanRate",
+    # The rate with which the values shall be sampled.
+    JSON_MEASUREMENT_SCANRATE = "ScanRate",
 
-        # Contains the measurements that shall be done. The results of these
-        # measurements will be written to database. Returns a dictionary where
-        # the keys are user defined names of the measurments. The values are 
-        # mathematical expressions, that state how the value of the measuremnt 
-        # shall be calculated from the values that have been read from the 
-        # DAQ card. The mathematical expressions have to be given as a string,
-        # that is parseable by the praser.eval() python function. The Variables 
-        # in this expression are the channel names, defined via the 
-        # JSON_MEASUREMENT_CHANNELS configuration.
-        "JSON_MEASUREMENTS" : "Measurements" 
-    }
+    # Contains the measurements that shall be done. The results of these
+    # measurements will be written to database. Returns a dictionary where
+    # the keys are user defined names of the measurments. The values are 
+    # mathematical expressions, that state how the value of the measuremnt 
+    # shall be calculated from the values that have been read from the 
+    # DAQ card. The mathematical expressions have to be given as a string,
+    # that is parseable by the praser.eval() python function. The Variables 
+    # in this expression are the channel names, defined via the 
+    # JSON_MEASUREMENT_CHANNELS configuration.
+    JSON_MEASUREMENTS = "Measurements" 
    
     def __init__(self, configFileName):
         """
@@ -74,19 +70,15 @@ class SentinelConfig:
         """
 
         # Check if file exists.
-        if(not os.path.isfile(configFileName)):
+        if not os.path.isfile(configFileName):
             self.__valid = False
             return
 
-        # Parse __CONFIG_KEY_DICT into instance attributes.
-        for key, value in __CONFIG_KEY_DICT.items():
-            self.key = value
-
         # Read the JSON file into a dict.
         jsonFilePtr = open(configFileName, 'r')
-        self.configDict = json.load(jsonFilePtr)
+        self.__configDict = json.load(jsonFilePtr)
 
-        if self.configDict != None:
+        if self.__configDict != None:
             self.__valid = True
         else:
             self.__valid = False
@@ -101,51 +93,36 @@ class SentinelConfig:
 
         return self.__valid
 
-    def getConfig(self, configKey):
+    def getConfig(self, configDomain):
         """
-        Returns configuration data, specified by configKey. configKey can be 
-        one of the JSON_* constants of SentinelConfig.
+        Returns a configuration data according to the configDomain parameter.
 
         Parameters:
-        configKey (string): Specifies what configuration data should be 
-        retrieved. Can be one of the JSON_* constants of SentinelConfig.
+        configDomain (string): Specifies of what configuration domain the data
+        shall be retrieved. Can be one of the following: 
+            JSON_DATABASE_CONFIG: A dict containing the database 
+            configuration will be returned.
+
+            JSON_MEASUREMENT_CONFIG: A list containing dicts with Measurement
+            configuration will be returned
 
         Returns:
-        The configuration data specified by configKey. None if the configuration
-        could not be found.
+        A deep copy of the configuration object.
 
         Throws:
-        Exception: When the requested configuration data should be present, but
-        was missing in the JSON config file.
+        Exception: When this object has not initialized correctly.
+        ValueError: When configDomain is not a valid configuration key.
         """
 
-        # Check if configKey is a known configuration key.
-        configFound = False
+        # Check wether this object contains valid values.
+        if not self.__valid:
+            raise Exception("Config object does not contain valid values.")
 
-        if configKey == SentinelConfig.JSON_DATABASE_CONFIG:
-            if SentinelConfig.JSON_DATABASE_CONFIG in self.__configDict.keys():
-                retVal = self.__configDict[configKey]
-                configFound = True
 
-        elif configKey == SentinelConfig.JSON_DATABASE_NAME:
-            if SentinelConfig.JSON_DATABASE_NAME in self.__configDict.keys():
-                retVal = self.__configDict[configKey]
-                configFound = True      
-
-        elif configKey == SentinelConfig.JSON_ACQUISITION_BUFFER:
-
-        elif configKey == SentinelConfig.JSON_WRITE_INTERVALL:
-
-        elif configKey == SentinelConfig.JSON_MEASUREMENT_CONFIG:
-
-        elif configKey == SentinelConfig.JSON_MEASUREMENT_NAME:
-
-        elif configKey == SentinelConfig.JSON_MEASUREMENT_CHANNELS:
-
-        elif configKey == SentinelConfig.JSON_MEASUREMENT_SCANRATE:
-        
-        elif configKey == SentinelConfig.JSON_MEASUREMENTS:
-
+        if configDomain == SentinelConfig.JSON_DATABASE_CONFIG:
+            return copy.deepcopy(self.__configDict[configDomain])
+        elif configDomain == SentinelConfig.JSON_MEASUREMENT_CONFIG:
+            return copy.deepcopy(self.__configDict[configDomain])
         else:
-            # Unknown configuration key.
-            retVal = None
+            # Invalid config key has been passed. Raise ValueError.
+            raise ValueError("Invalid configuration key.")
