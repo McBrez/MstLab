@@ -18,6 +18,7 @@ from sys import stdout
 from time import sleep
 import threading
 from datetime import datetime
+import parser
 
 # MC118 imports
 from daqhats import mcc118, OptionFlags, HatIDs, HatError
@@ -61,7 +62,8 @@ class DataAquisition(threading.Thread):
         # Load configuration objects.
         self.__configObject = configObject
         self.__measurementConfig = \
-            self.configObject.getConfig(SentinelConfig.JSON_MEASUREMENT_CONFIG)
+            self.__configObject.getConfig(
+                SentinelConfig.JSON_MEASUREMENT_CONFIG)
         
         # Set the storage function.
         self.__storeFunc = storeFunc
@@ -89,93 +91,52 @@ class DataAquisition(threading.Thread):
         self.__activeMeasConfig = self.__getMeasConfig()
         readIntervall = \
             self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
+        calculations = \
+            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENTS]
+        measurementConfigName = \
+            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_NAME]
+
         # Convert from milli seconds to seconds.
         readIntervall = readIntervall / 1000.0
 
-        # Get channels
+        # Write configured channel numbers from configuration into 
+        # channelNums
         channelNums = []
-        channelKeys = \
-            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]\
-                .keys()
-        for channel in channelKeys:
+        channelDict = \
+            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]
+        for channel in channelDict.keys():
             channelNums.append(int(channel))
 
         # Get an instance of the selected hat device object.
         address = select_hat_device(HatIDs.MCC_118)
         hat = mcc118(address)
 
+        # Measurement Loop.
+        channelValues = {}
         while self.__runThread:
+
             # Construct timestamp.
-            
-            
-            # Read a single value from each selected channel.
+            timestamp = datetime.now().isoformat()
+         
+            # Read a single value from each configured channel.
+            channelValues.clear()
             for chan in channelNums:
+                channelTag = channelDict[str(chan)]
+                channelValues[channelTag] = hat.a_in_read(chan, options)
+
+            # Execute configured measurement calculations.
+            for name, expr in calculations.items():
+                # Evaluate expression
+                value = self.__doCalculation(expr, channelDict, channelValues)
                 
-                value = hat.a_in_read(chan, options)
-
-
+                # Hand calculated value over to database interface.
+                measurementName = \
+                    measurementConfigName + "_" + name
+                valueCache = dict([(timestamp,value)])
+                self.__storeFunc(measurementName, valueCache)
 
             # Wait the configured interval between reads.
             sleep(readIntervall)
-
-    def __read_and_display_data(self, hat, num_channels):
-        """
-        Reads data from the specified channels on the specified DAQ HAT devices
-        and updates the data on the terminal display.  The reads are executed in a
-        loop that continues until the user stops the scan or an overrun error is
-        detected
-        Args:
-            hat (mcc118): The mcc118 HAT device object.
-            num_channels (int): The number of channels to display.
-        Returns:
-            None
-        """
-        total_samples_read = 0
-        read_request_size = DataAquisition.READ_ALL_AVAILABLE
-
-        # When doing a continuous scan, the timeout value will be ignored in the
-        # call to a_in_scan_read because we will be requesting that all available
-        # samples (up to the default buffer size) be returned.
-        timeout = 5.0
-
-        # Read all of the available samples (up to the size of the read_buffer which
-        # is specified by the user_buffer_size).  Since the read_request_size is set
-        # to -1 (READ_ALL_AVAILABLE), this function returns immediately with
-        # whatever samples are available (up to user_buffer_size) and the timeout
-        # parameter is ignored.
-        while True:
-            read_result = hat.a_in_scan_read(read_request_size, timeout)
-
-            # Check for an overrun error
-            if read_result.hardware_overrun:
-                print('\n\nHardware overrun\n')
-                break
-            elif read_result.buffer_overrun:
-                print('\n\nBuffer overrun\n')
-                break
-
-            samples_read_per_channel = int(len(read_result.data) / num_channels)
-            total_samples_read += samples_read_per_channel
-
-            # Display the last sample for each channel.
-            print('\r{:12}'.format(samples_read_per_channel),
-                ' {:12} '.format(total_samples_read), end='')
-
-            if samples_read_per_channel > 0:
-                index = samples_read_per_channel * num_channels - num_channels
-
-                for i in range(num_channels):
-                    print('{:10.5f}'.format(read_result.data[index+i]), 'V ',
-                        end='')
-                stdout.flush()
-
-                timestamp = datetime.now().isoformat()
-                valueCache = {}
-                valueCache[timestamp] = read_result.data[index]
-                self.storeFunc('TestConfig_TestMeasurement1', valueCache)
-                sleep(0.1)
-
-        print('\n')
 
     def __getMeasConfig(self):
         """
@@ -205,3 +166,35 @@ class DataAquisition(threading.Thread):
 
         self.__runThread = False
         return
+
+    def __doCalculation(self, expr, channelDict, channelValues):
+        """
+        Replaces the channel tags in the mathematial expression expr with 
+        measurement values, given in channelValues.
+
+        Parameters:
+        
+        expr (string): A mathematical expression containing channel tags.
+        
+        channelDict (dict<string,string>): A dictionary containing the 
+        channel/channel tag association. The key is the channel number, the 
+        value is the corresponding channel tag.
+
+        channelValues (dict<string,float>) A dictionary containing the values 
+        of the channels. The key is the channel tag, the value is the measured
+        value of the corresponding channel.
+
+        Returns:
+        A float that represents the result of expr.
+        """
+
+        # Iterate over channelDict and try to replace channel tokens in expr
+        # with the values from channelValues.
+        for __, channelToken in channelDict.items():
+            value = channelValues[channelToken]
+            expr = expr.replace(channelToken, value)
+        
+        # Evaluate expression
+        return eval(expr)
+
+        

@@ -113,9 +113,13 @@ class DatabaseInterface:
         Used to queue measurement values for storage to database.
 
         Parameters:
-        values: Immutable list of triples. The first value of the tuple 
-        is expected to be a timestamp in the format XXX. THe second value should
-        be the measurement tag. The third is the measurement value.
+        
+        measurement (string): A name to uniquely identify the meaurement. 
+        Is also the name of the SQL table the values are written to. As such, 
+        measurement should comply with SQL syntax rules.
+
+        values: (dict<string,float>): A dictionary, that contains timestamp, 
+        value tuples.
         """
 
         # Aquire lock
