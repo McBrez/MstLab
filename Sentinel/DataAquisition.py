@@ -84,6 +84,8 @@ class DataAquisition(threading.Thread):
         config and contains measurment loop.  
         """
 
+        self.__runThread = True
+
         # Get constant for single shot read.
         options = OptionFlags.DEFAULT
 
