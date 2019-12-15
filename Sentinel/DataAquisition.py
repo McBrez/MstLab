@@ -194,7 +194,7 @@ class DataAquisition(threading.Thread):
         # with the values from channelValues.
         for __, channelToken in channelDict.items():
             value = channelValues[channelToken]
-            expr = expr.replace(channelToken, value)
+            expr = expr.replace(channelToken, str(value))
         
         # Evaluate expression
         return eval(expr)
