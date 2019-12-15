@@ -37,30 +37,48 @@ class DatabaseInterface:
         """
         Constructs the database interface. Does not create a database or connect
         to it. Before this object is operational, and data can be written to the
-        database, start() function has to be
-        called.
+        database, start() function has to be called.
 
         Parameters:
-        configObject (dict): The dict that SentinelConfig.GetConfig() returns.
+        configObject (SentinelConfig): The configuration data is extracted from
+        this object.
         """
         
-        self.configObject = configObject
+        # Get main configuration domains
+        self.databaseConfig = configObject.getConfig(
+            SentinelConfig.JSON_DATABASE_CONFIG)
+        self.measurementConfig = configObject.getConfig(
+            SentinelConfig.JSON_MEASUREMENT_CONFIG)
+
+        # Extract configuration data from databaseConfig.
         self.databaseName = \
-            str(configObject[SentinelConfig.JSON_DATABASE_NAME])
+            str(self.databaseConfig[SentinelConfig.JSON_DATABASE_NAME])
         self.bufferSize = \
-            int(configObject[SentinelConfig.JSON_DATABASE_BUFFER_SIZE])
+            int(self.databaseConfig[SentinelConfig.JSON_ACQUISITION_BUFFER])
         self.storageIntervall = \
-            int(configObject.findtext(SentinelConfig.XML_DATABASE_STORAGE_INTERVALL))
+            int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
+        # Set up worker thread.
         self.__workerThread = threading.Thread(
             group = None,
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
             daemon = None)
         
+        # A semaphore is needed, to avoid race conditions when this object is
+        # trying to write back to databse, and another module is adding values
+        # to the value cache.
         self.__writeSemaphore = threading.Semaphore(value = 1)
+
+        # Boolean that signals wether this object is connected to a database.
         self.__connected = False
+
+        # The database connection.
         self.dbConnection = None
+
+        # Values will be written to this dict from other objects.
+        # DatabaseInterface will write the contents of valueCache back to 
+        # database, if the configured write intervall elapsed. 
         self.valueCache = {}
     
     def start(self):
@@ -116,11 +134,12 @@ class DatabaseInterface:
 
     def __workerWriteback(self):
         """
-        Worker function, that continuously calls a writeback function.
+        Worker function, that creates database structure according to 
+        configuration, and then continuously executes the write back of the 
+        value cache to the databse.
         """
         # Try to establish connection to databse.
         try:
-            # self.dbConnection = sqlite3.connect(self.databaseName)
             self.dbConnection = sqlite3.connect(self.databaseName)
         except:
             self.__connected = False
@@ -130,20 +149,20 @@ class DatabaseInterface:
         c = self.dbConnection.cursor()
 
         # Create a table for each Measurement and MeasurementConfig
-        measConfigTree = \
-            self.configObject.findall(SentinelConfig.XML_MEASUREMENT_CONFIG)
-
-        # Iterate over measurement configurations
-        for measurementConf in measConfigTree:
-            measConfigName = measurementConf.attrib['name']
-            measurements = measurementConf.findall(SentinelConfig.XML_MEASUREMENT)
+        for measurementConf in self.measurementConfig:
+            measConfigName = \
+                str(measurementConf[SentinelConfig.JSON_MEASUREMENT_NAME])
+            measurements = \
+                measurementConf[SentinelConfig.JSON_MEASUREMENTS]
 
             # Iterate over measurements.
-            for measurement in measurements:
-                # Build table name from MeasurementConfig name + Measurement name.
-                measName = measurement.attrib['name']
-                tableName = measConfigName + "_" + measName
-                query = DatabaseInterface.CREATE_QUERY.substitute(tableName = tableName)
+            for measurementName in measurements.keys():
+                # Build table name from MeasurementConfig name + Measurement 
+                # name.
+                tableName = measConfigName + "_" + str(measurementName)
+                query = \
+                    DatabaseInterface.CREATE_QUERY.substitute(
+                        tableName = tableName)
                 c.execute(query)
 
         # Enter writeback loop.
@@ -187,11 +206,11 @@ class DatabaseInterface:
             self.dbConnection.commit()
             self.__writeSemaphore.release()
 
-    def addTestData(self):
-        self.valueCache["TestConfig_TestMeasurement1"] = {}
-        self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp1"] = 1.1
-        self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp2"] = 2.2
+    # def addTestData(self):
+    #     self.valueCache["TestConfig_TestMeasurement1"] = {}
+    #     self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp1"] = 1.1
+    #     self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp2"] = 2.2
 
-        self.valueCache["TestConfig_TestMeasurement2"] = {}
-        self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp1"] = 3.3
-        self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp2"] = 3.3
+    #     self.valueCache["TestConfig_TestMeasurement2"] = {}
+    #     self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp1"] = 3.3
+    #     self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp2"] = 3.3

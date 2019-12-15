@@ -21,18 +21,20 @@ from datetime import datetime
 
 # MC118 imports
 from daqhats import mcc118, OptionFlags, HatIDs, HatError
-from daqhats_utils import select_hat_device, enum_mask_to_string, chan_list_to_mask
+from daqhats_utils import select_hat_device, enum_mask_to_string,\
+     chan_list_to_mask
 
 # Project imports
 from SentinelConfig import SentinelConfig
 
 class DataAquisition(threading.Thread):
     """
-    Encapsulates the data aquisition functions. Inherits from threading.Thread, so the aquisition
-    can run parallely in a separate thread.
+    Encapsulates the data aquisition functions. Inherits from threading.Thread, 
+    so the aquisition can run parallely in a separate thread.
 
     Instance Attributes:
-        scanConfig(DataAquisitionConfig): Stores the configuration of the data aquisition.
+        scanConfig(DataAquisitionConfig): Stores the configuration of the data 
+        aquisition.
     """
 
     READ_ALL_AVAILABLE = -1
@@ -41,108 +43,80 @@ class DataAquisition(threading.Thread):
 
     def __init__(self, configObject, storeFunc):
         """
-        Constructor, that copies the contents of configObject into the DataAquisition object.
+        Constructor, that copies the contents of configObject into the 
+        DataAquisition object and registers the storage function that is used
+        to pass the measured valus to database interface.
 
         parameters:
-            configObject (DataAquisitionConfig): Contains the configuration for creation of this 
-            object.
-            storeFunc ((void)(storeObj)): A refernce to function, that is called to store the 
-            aquired data. The store function should return nothing, and take a storeObj. 
+            configObject (DataAquisitionConfig): Contains the configuration for 
+            creation of this object.
+            storeFunc ((void)(storeObj)): A refernce to function, that is called
+            to store the aquired data. The store function should return nothing,
+            and take a storeObj. 
         """
 
+        # Call constructor of super class.
         threading.Thread.__init__(self)
-        self.scanConfig = configObject
-        self.storeFunc = storeFunc
 
-        self.valueCache = {}
-        self.valueCache['TestConfig_TestMeasurement1'] = {}
+        # Load configuration objects.
+        self.__configObject = configObject
+        self.__measurementConfig = \
+            self.configObject.getConfig(SentinelConfig.JSON_MEASUREMENT_CONFIG)
+        
+        # Set the storage function.
+        self.__storeFunc = storeFunc
 
-        ### Tentative code ###
-        self.channels = [0,1,2,3]
-        self.samplesPerChannel = 0
-        self.scanMode = OptionFlags.CONTINUOUS
-        self.scanRate = 1000.0
-        ### Tentative code end ###
+        # Init value cache
+        self.__valueCache = {}  
 
-        # Parse XML config tree into dict structure.
-        # self.measurementConfig = {}
-        # measConfigs = \
-        #     self.scanConfig.findall(SentinelConfig.XML_MEASUREMENT_CONFIG)
+        # Flag that indicates, that the worker thread loop shall be executed.
+        self.__runThread = False 
 
-        # for measConf in measConfigs:
-        #     measConfName = measConf.attrib['name']
-        #     self.measurementConfig[measConfName] = {}
-        #     self.measurementConfig[measConfName]['ScanRate'] = \
-        #         measConf.findtext("./" + SentinelConfig.XML_MEASUREMENT_SCAN_RATE)
-        #     self.measurementConfig[measConfName]['ConfigTag'] = \
-        #         measConf.findtext("./" + SentinelConfig.XML_MEASUREMENT_CONFIG_TAG)
-            
-        #     self.measurementConfig[measConfName]['Measurements'] = {}
-        #     measurementsTree = measConf.findAll("./" + SentinelConfig.XML_MEASUREMENT)
-        #     for measurments in measurementsTree:
-        #         measurementName = measurments.attrib['name']
-        #         self.measurementConfig[measConfName]['Measurements'][measurementName] = []
-        #         self.measurementConfig[measConfName]['Measurements'][measurementName].append(
-        #             measurments.findText("./" + SentinelConfig.XML_MEASUREMENT_CHANNEL_PORT))
+        # The active measurement configuration. Is set on start of worker 
+        # thread.
+        self.__activeMeasConfig = {}
 
     def run(self):
         """
-        Worker function, that can be called as thread. 
+        Worker function, that can be called as thread. Initializes measurement
+        config and contains measurment loop.  
         """
-        # Store the channels in a list and convert the list to a channel mask that
-        # can be passed as a parameter to the MCC 118 functions.
-        channel_mask = chan_list_to_mask(self.channels)
-        num_channels = len(self.channels)
 
-        try:
-            # Select an MCC 118 HAT device to use.
-            address = select_hat_device(HatIDs.MCC_118)
-            hat = mcc118(address)
+        # Get constant for single shot read.
+        options = OptionFlags.DEFAULT
 
-            print('\nSelected MCC 118 HAT device at address', address)
+        # Get current measurement configuration and some values out of it.
+        self.__activeMeasConfig = self.__getMeasConfig()
+        readIntervall = \
+            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
+        # Convert from milli seconds to seconds.
+        readIntervall = readIntervall / 1000.0
 
-            actual_scan_rate = hat.a_in_scan_actual_rate(num_channels, self.scanRate)
+        # Get channels
+        channelNums = []
+        channelKeys = \
+            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]\
+                .keys()
+        for channel in channelKeys:
+            channelNums.append(int(channel))
 
-            print('\nMCC 118 continuous scan example')
-            print('    Functions demonstrated:')
-            print('         mcc118.a_in_scan_start')
-            print('         mcc118.a_in_scan_read')
-            print('         mcc118.a_in_scan_stop')
-            print('    Channels: ', end='')
-            print(', '.join([str(chan) for chan in self.channels]))
-            print('    Requested scan rate: ', self.scanRate)
-            print('    Actual scan rate: ', actual_scan_rate)
-            print('    Options: ', enum_mask_to_string(OptionFlags, self.scanMode))
+        # Get an instance of the selected hat device object.
+        address = select_hat_device(HatIDs.MCC_118)
+        hat = mcc118(address)
 
-            # Configure and start the scan.
-            # Since the continuous option is being used, the samples_per_channel
-            # parameter is ignored if the value is less than the default internal
-            # buffer size (10000 * num_channels in this case). If a larger internal
-            # buffer size is desired, set the value of this parameter accordingly.
-            hat.a_in_scan_start(
-                channel_mask,
-                self.samplesPerChannel,
-                self.scanRate,
-                self.scanMode)
+        while self.__runThread:
+            # Construct timestamp.
+            
+            
+            # Read a single value from each selected channel.
+            for chan in channelNums:
+                
+                value = hat.a_in_read(chan, options)
 
-            print('Starting scan ... Press Ctrl-C to stop\n')
 
-            # Display the header row for the data table.
-            print('Samples Read    Scan Count', end='')
-            for item in self.channels:
-                print('    Channel ', item, sep='', end='')
-            print('')
 
-            try:
-                self.__read_and_display_data(hat, num_channels)
-
-            except KeyboardInterrupt:
-                # Clear the '^C' from the display.
-                print(
-                    DataAquisition.CURSOR_BACK_2,
-                    DataAquisition.ERASE_TO_END_OF_LINE, '\n')
-        except (HatError, ValueError) as err:
-            print('\n', err)
+            # Wait the configured interval between reads.
+            sleep(readIntervall)
 
     def __read_and_display_data(self, hat, num_channels):
         """
@@ -203,8 +177,31 @@ class DataAquisition(threading.Thread):
 
         print('\n')
 
-    def __changeMeasConfig(self, configTag):
+    def __getMeasConfig(self):
         """
-        Changes the configuration of the module.
+        Reads RasPi GPIO inputs to determine the active measurment 
+        configuration.
+
+        Returns:
+        A dict representing the measurment configuration.
         """
+
+        # Currently only returns the first measurment configuration.
+        return self.__measurementConfig[0]
+
+    def __changeMeasConfig(self):
+        """
+        Triggered by an RasPi GPIO value change. Changes the measurement
+        configuration accordingly.
+        """
+
+        # TODO:
         pass
+
+    def stop(self):
+        """
+        Stops the worker loop after completing one last worker loop iteration.
+        """
+
+        self.__runThread = False
+        return

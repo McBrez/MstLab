@@ -1,8 +1,8 @@
 {
     "DatabaseConfig" : {
         "DatabaseName" : "sentinelDb.sl3",
-        "AquisitionBufferSize" : 300,
-        "DatabaseWriteIntervall" : 1000
+        "AcquisitionBufferSize" : 300,
+        "WriteIntervall" : 1000
     },
     "MeasurmentConfig" : [
         {

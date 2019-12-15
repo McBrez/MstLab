@@ -1,5 +1,5 @@
 """
-This program has been created as a part of the MST lab lecture. 
+This program has been created as a part of the MST lab lecture.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -13,16 +13,16 @@ from DataAquisition import DataAquisition
 class Sentinel:
 
     # The name of the config file, that gets read in at start up.
-    CONFIG_FILE_NAME = "sentinelConfig.json" 
+    CONFIG_FILE_NAME = "sentinelConfig.json"
 
     def __init__(self, configFile):
         """
-        Stores the paths of the XML config file and the name of the SQLite 
+        Stores the paths of the XML config file and the name of the SQLite
         database file. Does not start the object.
 
         Paramterers:
         configFile (string): Path to the XML config file.
-        databaseFile (string): Name of the SQlite databse file that shall be 
+        databaseFile (string): Name of the SQlite databse file that shall be
         created.
         """
 
@@ -34,7 +34,7 @@ class Sentinel:
 
     def main(self):
         """
-        Main method of the class. Starts the sentinel and all of its sub 
+        Main method of the class. Starts the sentinel and all of its sub
         modules.
         """
 
@@ -42,11 +42,11 @@ class Sentinel:
         self.configObject = SentinelConfig(self.configFile)
         if(not self.configObject.isValid()):
             print("Could not read configuration file. Aborting.")
-            return     
+            return
 
         # Start database interface
         self.databaseInterface = DatabaseInterface(
-            self.configObject.getConfig(SentinelConfig.JSON_DATABASE_CONFIG))
+            self.configObject)
 
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
@@ -54,13 +54,14 @@ class Sentinel:
 
         # Start data aquisition thread.
         self.dataAquisition = DataAquisition(
-            configTree,
+            self.configObject,
             self.databaseInterface.storeFunction)
         self.dataAquisition.start()
 
         # Start networking
 
-        # Endless loop
+        # Endless loop querying for STRG + C. 
+
 
 if __name__ == '__main__':
     mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)
