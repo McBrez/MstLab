@@ -13,22 +13,107 @@ License:
 # Third party imports
 import RPi.GPIO as GPIO
 
+# Project imports
+from SentinelConfig import SentinelConfig
+
 class GpioHandler:
     """
     Connects to a set of RasPi GPIOs. Generates an event, if the state of the 
     GPIO change.
     """
 
+    # A list of GPIO pins, that are not allowed, because they are already 
+    # occupied by other functions.
+    GPIO_PROHIBITED_PINS = [8,9,10,11,12,13,26]
+
     def __init__(self, configObject, onGpioChange):
-    """
-    Loads the configObject.
-    
-    Parameters:
+        """
+        Loads the configObject.
+        
+        Parameters:
 
-    configObject (SentinelConfig): The object, the configuration shall be loaded
-    from.
+        configObject (SentinelConfig): The object, the configuration shall be loaded
+        from.
 
-    onGpioChange (function): A function, that will be called, when the state of
-    the GPIOs change.
-    """
+        onGpioChange (function): A function, that will be called, when the state of
+        the GPIOs change.
+        """
 
+        # Set RPi.GPIO module to use board numbering. 
+        GPIO.setmode(GPIO.BOARD)
+
+        # Get measurement control config.
+        self.__measContConfig = configObject.getConfig(
+            SentinelConfig.JSON_MEAS_CONTROL)
+
+        # Check if configured GPIO pins are valid.
+        gpioSel = self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]
+        gpioSet = set(GpioHandler.GPIO_PROHIBITED_PINS)
+        if gpioSet.intersection(gpioSel):
+            raise ValueError(
+                "Configuration error. " +
+                SentinelConfig.JSON_MEAS_CONTROL_SEL + 
+                " defines prohibited GPIO pins.")
+
+        gpioOut = self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]
+        if gpioSet.intersection(gpioOut):
+            raise ValueError(
+                "Configuration error. " +
+                SentinelConfig.JSON_MEAS_CONTROL_OUTPUT + 
+                " defines prohibited GPIO pins.")
+
+        # Get output states of measurement configurations.
+        measConfs = configObject.getConfig(
+            SentinelConfig.JSON_MEASUREMENT_CONFIG)
+
+        self.__outputStates = []
+        for measConf in measConfs:
+            self.__outputStates.append( 
+                measConf[SentinelConfig.JSON_MEASUREMENT_OUT_STATE])
+
+    def start(self):
+        """
+        Sets up in- and outputs and start listeners for inputs.
+        """
+
+        # Setup in/outputs. 
+        GPIO.setup(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL],
+            GPIO.IN,
+            pull_up_down = GPIO.PUD_DOWN)
+        GPIO.setup(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
+            GPIO.OUT,
+            initial = GPIO.HIGH)
+
+        # Register callbacks for inputs.
+        for pin in self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]:
+            GPIO.add_event_detect(
+                pin,
+                GPIO.BOTH,
+                callback = self.__cbGpioChanged,
+                bouncetime = 200)
+
+    def stop(self):
+        """
+        Stops the GPIO listeners and cleans GPIO settings.
+        """
+
+        GPIO.cleanup()
+
+    def __handleOutput(self):
+        """
+        Sets output pin according to active measurment configuration.
+        """
+
+    def __cbGpioChanged(self, channel):
+        """
+        Is registered to RPi.GPIO module, and is called when the state of the
+        subscribed GPIOs change. 
+
+        Paramters:
+
+        channels (int): The GPIO pin that changed.
+        """
+
+        print("Event on" + str(channel) + "detected.")

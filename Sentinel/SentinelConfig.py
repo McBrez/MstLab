@@ -122,6 +122,8 @@ class SentinelConfig:
             JSON_MEASUREMENT_CONFIG: A list containing dicts with Measurement
             configuration will be returned
 
+            JSON_MEAS_CONTRO: A dictionary of measurement control information.
+
         Returns:
         A deep copy of the configuration object.
 
@@ -138,6 +140,8 @@ class SentinelConfig:
         if configDomain == SentinelConfig.JSON_DATABASE_CONFIG:
             return copy.deepcopy(self.__configDict[configDomain])
         elif configDomain == SentinelConfig.JSON_MEASUREMENT_CONFIG:
+            return copy.deepcopy(self.__configDict[configDomain])
+        elif configDomain == SentinelConfig.JSON_MEAS_CONTROL:
             return copy.deepcopy(self.__configDict[configDomain])
         else:
             # Invalid config key has been passed. Raise ValueError.
