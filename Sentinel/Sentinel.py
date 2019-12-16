@@ -31,7 +31,7 @@ class Sentinel:
         self.configObject = None
         self.databaseInterface = None
         self.dataAquisition = None
-        self.GpioHandler = None
+        self.gpioHandler = None
         return
 
     def main(self):
@@ -61,13 +61,13 @@ class Sentinel:
         self.dataAquisition.start()
 
         # Start GPIO handler.
-        self.GpioHandler = GpioHandler(
+        self.gpioHandler = GpioHandler(
             self.configObject,
             self.dataAquisition.changeMeasConfig)
-        )
+	self.gpioHandler.start()
         # Start networking
 
-        # Endless loop querying for STRG + C. 
+        # Endless loop querying for STRG + C.
 
 if __name__ == '__main__':
     mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)

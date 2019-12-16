@@ -47,7 +47,8 @@ class GpioHandler:
             SentinelConfig.JSON_MEAS_CONTROL)
 
         # Check if configured GPIO pins are valid.
-        gpioSel = self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]
+        gpioSel = set(
+		self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL])
         gpioSet = set(GpioHandler.GPIO_PROHIBITED_PINS)
         if gpioSet.intersection(gpioSel):
             raise ValueError(
@@ -55,7 +56,8 @@ class GpioHandler:
                 SentinelConfig.JSON_MEAS_CONTROL_SEL + 
                 " defines prohibited GPIO pins.")
 
-        gpioOut = self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]
+        gpioOut = set(
+		[self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]])
         if gpioSet.intersection(gpioOut):
             raise ValueError(
                 "Configuration error. " +
