@@ -89,8 +89,7 @@ class GpioHandler:
         # Setup in/outputs. 
         GPIO.setup(
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL],
-            GPIO.IN,
-            pull_up_down = GPIO.PUD_UP)
+            GPIO.IN)
         GPIO.setup(
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
             GPIO.OUT,
