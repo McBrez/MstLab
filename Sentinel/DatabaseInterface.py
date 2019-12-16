@@ -112,10 +112,8 @@ class DatabaseInterface:
         """
 
         self.__runThread = False
-        self.__workerThread.join()
-        self.dbConnection.close()    
+        self.__workerThread.join() 
         
-
     def storeFunction(self, measurement, value):
         """
         Used to queue measurement values for storage to database.
@@ -182,6 +180,9 @@ class DatabaseInterface:
             # Call __writeback every storageIntervall milliseconds.
             time.sleep(self.storageIntervall/1000.0)
             self.__writeback()
+        
+        # Close database connection, after writeback loop finished.
+        self.dbConnection.close()
 
     def __writeback(self):
         """

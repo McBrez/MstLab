@@ -102,7 +102,7 @@ class GpioHandler:
                 pin,
                 GPIO.BOTH,
                 callback = self.__cbGpioChanged,
-                bouncetime = 200)
+                bouncetime = 1000)
 
     def stop(self):
         """
@@ -139,6 +139,7 @@ class GpioHandler:
 
         # Get new channel value.
         value = GPIO.input(channel)
+        print("Got value from " + str(channel) + ". It is: " + str(value) )
 
         # Determine new bit field value.
         position = \
