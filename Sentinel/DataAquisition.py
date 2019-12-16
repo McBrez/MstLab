@@ -177,9 +177,9 @@ class DataAquisition:
         # generated from the currently active scanRate. If longer than 
         # 2 * scanRate is waited, an exception is raised.
         self.__runThread = False
-        self.workerThread.join(timeout = 2 * scanRate / 1000.0)
+        self.__workerThread.join(timeout = 2 * scanRate / 1000.0)
         
-        if self.is_alive():
+        if self.__workerThread.is_alive():
             # Thread is still alive, when it already should have terminated.
             # Raise an exception.
             raise Exception("DataAquisition working loop could not terminate")
