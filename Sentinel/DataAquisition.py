@@ -150,7 +150,9 @@ class DataAquisition(threading.Thread):
 
         # Get current scan rate, before changing measurement configuration.
         scanRate = \
-            self.__measurementConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
+            self.__measurementConfig\
+                [self.__activeMeasConfigIdx]\
+                [SentinelConfig.JSON_MEASUREMENT_SCANRATE]
 
         # Set new measurement configuration index.
         self.__activeMeasConfigIdx = measConfIdx

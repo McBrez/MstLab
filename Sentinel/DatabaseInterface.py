@@ -111,7 +111,7 @@ class DatabaseInterface:
         True is stopped successfully. False otherwise.
         """
 
-        self.__runThread = True
+        self.__runThread = False
         self.__workerThread.join()
         self.dbConnection.close()    
         
