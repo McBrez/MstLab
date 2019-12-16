@@ -77,6 +77,10 @@ class DataAquisition(threading.Thread):
         # The active measurement configuration index.
         self.__activeMeasConfigIdx = 0
 
+        # A semaphore is needed on confugration change, so only one one call 
+        # to self.changeMeasConfig() at a time is possible
+        self.__changeMeasConfSem = threading.Semaphore(value = 1)
+
     def run(self):
         """
         Worker function, that can be called as thread. Initializes measurement
@@ -148,6 +152,9 @@ class DataAquisition(threading.Thread):
         shall be changed to.
         """
 
+        # Aquire lock.
+        self.__changeMeasConfSem.acquire()
+
         # Get current scan rate, before changing measurement configuration.
         scanRate = \
             self.__measurementConfig\
@@ -168,6 +175,9 @@ class DataAquisition(threading.Thread):
         # Restart thread.
         self.__runThread = True
         self.start()
+
+        # Release lock
+        self.__changeMeasConfSem.release()
 
     def stop(self):
         """

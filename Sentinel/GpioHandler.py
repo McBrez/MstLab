@@ -145,8 +145,16 @@ class GpioHandler:
         # Determine new bit field value.
         position = \
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]\
-                .index(channel)     
-        self.__measConfBitField = self.__measConfBitField | (value << position)
+                .index(channel)
+        
+        if value:
+            # Set bit
+            self.__measConfBitField = \
+                self.__measConfBitField | (value << position)
+        else:
+            # Unset bit
+            self.__measConfBitField = \
+                self.__measConfBitField & (value << position)
 
         # Handle output to comply to the new measurement configuration.
         self.__handleOutput()
