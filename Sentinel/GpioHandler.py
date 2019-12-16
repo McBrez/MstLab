@@ -90,7 +90,7 @@ class GpioHandler:
         GPIO.setup(
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL],
             GPIO.IN,
-            pull_up_down = GPIO.PUD_DOWN)
+            pull_up_down = GPIO.PUD_UP)
         GPIO.setup(
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
             GPIO.OUT,
@@ -137,8 +137,9 @@ class GpioHandler:
         channels (int): The GPIO pin that changed.
         """
 
-        # Get new channel value.
-        value = GPIO.input(channel)
+        # Get new channel value. It has to be inverted, because we use pull up
+        # resistors.
+        value = not GPIO.input(channel)
         print("Got value from " + str(channel) + ". It is: " + str(value) )
 
         # Determine new bit field value.
