@@ -15,7 +15,8 @@
             "Measurements" : {
                 "CurrentShunt" : "(UR1 - UR2) / 0.01",
                 "VoltageLever1" : "UR1 - UR2"
-            }
+            },
+            "OutputState" : false 
         },
         {
             "ConfigName" : "Config2",
@@ -26,7 +27,12 @@
             "ScanRate" : 2000,
             "Measurements" : {
                 "VoltageCoil1" : "UR3 - UR4"
-            }
+            },
+            "OutputState" : true 
         }
-    ] 
+    ],
+    "MeasurementControl" : {
+        "MeasConfigSelectionGpio" : [0,1,2],
+        "MeasConfigOutputGpio" : 4  
+    }
 }

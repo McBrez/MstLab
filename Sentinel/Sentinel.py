@@ -9,6 +9,7 @@ Date: DEC 2019
 from SentinelConfig import SentinelConfig
 from DatabaseInterface import DatabaseInterface
 from DataAquisition import DataAquisition
+from GpioHandler import GpioHandler
 
 class Sentinel:
 
@@ -30,6 +31,7 @@ class Sentinel:
         self.configObject = None
         self.databaseInterface = None
         self.dataAquisition = None
+        self.GpioHandler = None
         return
 
     def main(self):
@@ -58,10 +60,14 @@ class Sentinel:
             self.databaseInterface.storeFunction)
         self.dataAquisition.start()
 
+        # Start GPIO handler.
+        self.GpioHandler = GpioHandler(
+            self.configObject,
+            self.dataAquisition.changeMeasConfig)
+        )
         # Start networking
 
         # Endless loop querying for STRG + C. 
-
 
 if __name__ == '__main__':
     mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)

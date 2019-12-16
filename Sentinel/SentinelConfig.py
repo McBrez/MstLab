@@ -48,6 +48,10 @@ class SentinelConfig:
     # The rate with which the values shall be sampled.
     JSON_MEASUREMENT_SCANRATE = "ScanRate"
 
+    # Specifies the state of the GPIO output pin, if a specific measurment 
+    # configuration is active.
+    JSON_MEASUREMENT_OUT_STATE = "OutputState"
+
     # Contains the measurements that shall be done. The results of these
     # measurements will be written to database. Returns a dictionary where
     # the keys are user defined names of the measurments. The values are 
@@ -58,7 +62,19 @@ class SentinelConfig:
     # in this expression are the channel names, defined via the 
     # JSON_MEASUREMENT_CHANNELS configuration.
     JSON_MEASUREMENTS = "Measurements" 
-   
+
+    # Dictionary that contains information on how the measurement shall be
+    # controlled.    
+    JSON_MEAS_CONTROL = "MeasurementControl"
+    
+    # A list of GPIO pin numbers that specifies which measurement configuration
+    # shall be active.
+    JSON_MEAS_CONTROL_SEL = "MeasConfigSelectionGpio"
+
+    # A integer that specifies a GPIO pin, that assumes a state corresponding to
+    # the currently active measurement configuration.
+    JSON_MEAS_CONTROL_OUTPUT = "MeasConfigOutputGpio"
+
     def __init__(self, configFileName):
         """
         Reads in the JSON file given with configFileName, and constructs the 
@@ -92,40 +108,6 @@ class SentinelConfig:
         """
 
         return self.__valid
-
-    def getConfig(self, configDomain):
-        """
-        Returns a configuration data according to the configDomain parameter.
-
-        Parameters:
-        configDomain (string): Specifies of what configuration domain the data
-        shall be retrieved. Can be one of the following: 
-            JSON_DATABASE_CONFIG: A dict containing the database 
-            configuration will be returned.
-
-            JSON_MEASUREMENT_CONFIG: A list containing dicts with Measurement
-            configuration will be returned
-
-        Returns:
-        A deep copy of the configuration object.
-
-        Throws:
-        Exception: When this object has not initialized correctly.
-        ValueError: When configDomain is not a valid configuration key.
-        """
-
-        # Check wether this object contains valid values.
-        if not self.__valid:
-            raise Exception("Config object does not contain valid values.")
-
-
-        if configDomain == SentinelConfig.JSON_DATABASE_CONFIG:
-            return copy.deepcopy(self.__configDict[configDomain])
-        elif configDomain == SentinelConfig.JSON_MEASUREMENT_CONFIG:
-            return copy.deepcopy(self.__configDict[configDomain])
-        else:
-            # Invalid config key has been passed. Raise ValueError.
-            raise ValueError("Invalid configuration key.")
 
     def getConfig(self, configDomain):
         """

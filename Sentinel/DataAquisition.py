@@ -152,10 +152,13 @@ class DataAquisition(threading.Thread):
         # Currently only returns the first measurment configuration.
         return self.__measurementConfig[0]
 
-    def __changeMeasConfig(self):
+    def changeMeasConfig(self, measConfIdx):
         """
         Triggered by an RasPi GPIO value change. Changes the measurement
         configuration accordingly.
+
+        measConfIdx (integer): The index of the measurement configuration, that
+        shall be changed to.
         """
 
         # TODO:
