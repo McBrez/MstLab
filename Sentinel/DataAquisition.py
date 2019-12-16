@@ -74,9 +74,8 @@ class DataAquisition(threading.Thread):
         # Flag that indicates, that the worker thread loop shall be executed.
         self.__runThread = False 
 
-        # The active measurement configuration. Is set on start of worker 
-        # thread.
-        self.__activeMeasConfig = {}
+        # The active measurement configuration index.
+        self.__activeMeasConfigIdx = 0
 
     def run(self):
         """
@@ -90,13 +89,13 @@ class DataAquisition(threading.Thread):
         options = OptionFlags.DEFAULT
 
         # Get current measurement configuration and some values out of it.
-        self.__activeMeasConfig = self.__getMeasConfig()
+        activeMeasConfig = self.__measurementConfig[self.__activeMeasConfigIdx]
         readIntervall = \
-            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
+            activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
         calculations = \
-            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENTS]
+            activeMeasConfig[SentinelConfig.JSON_MEASUREMENTS]
         measurementConfigName = \
-            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_NAME]
+            activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_NAME]
 
         # Convert from milli seconds to seconds.
         readIntervall = readIntervall / 1000.0
@@ -105,7 +104,7 @@ class DataAquisition(threading.Thread):
         # channelNums
         channelNums = []
         channelDict = \
-            self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]
+            activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]
         for channel in channelDict.keys():
             channelNums.append(int(channel))
 
@@ -140,18 +139,6 @@ class DataAquisition(threading.Thread):
             # Wait the configured interval between reads.
             sleep(readIntervall)
 
-    def __getMeasConfig(self):
-        """
-        Reads RasPi GPIO inputs to determine the active measurment 
-        configuration.
-
-        Returns:
-        A dict representing the measurment configuration.
-        """
-
-        # Currently only returns the first measurment configuration.
-        return self.__measurementConfig[0]
-
     def changeMeasConfig(self, measConfIdx):
         """
         Triggered by an RasPi GPIO value change. Changes the measurement
@@ -161,8 +148,24 @@ class DataAquisition(threading.Thread):
         shall be changed to.
         """
 
-        # TODO:
-        pass
+        # Get current scan rate, before changing measurement configuration.
+        scanRate = \
+            self.__measurementConfig[SentinelConfig.JSON_MEASUREMENT_SCANRATE]
+
+        # Set new measurement configuration index.
+        self.__activeMeasConfigIdx = measConfIdx
+
+        # Stop Acquisition loop and wait until it finishes. The timeout is 
+        # generated from the currently active scanRate. If longer than 
+        # 1.5 * scanRate is waited, an exception is raised.
+        self.__runThread = False
+        self.join(timeout = 1.5 * scanRate / 1000.0)
+
+        print("Changed measurement configuration to " + str(measConfIdx))
+        
+        # Restart thread.
+        self.__runThread = True
+        self.start()
 
     def stop(self):
         """

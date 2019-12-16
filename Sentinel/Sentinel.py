@@ -67,7 +67,12 @@ class Sentinel:
         self.gpioHandler.start()
         # Start networking
 
-        # Endless loop querying for STRG + C.
+        # Waiting for STRG + C.
+        print("Sentinel started. Press STRG + C to stop.")
+        try:
+            input()
+        except KeyboardInterrupt:
+            print("Sentinel stopped.")
 
 if __name__ == '__main__':
     mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)

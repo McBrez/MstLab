@@ -1,5 +1,5 @@
 """
-This program has been created as part of the MST lab lecture of  the institute
+This program has been created as part of the MST lab lecture of the institute
 of micromechanics TU Wien.
 This script defines a class, that connects to a set of GPIOs and generates an 
 event, if the GPIO state of this set changes. Also an Output is set 
@@ -9,6 +9,9 @@ Author: David FREISMUTH
 Date: DEC 2019
 License: 
 """
+
+# Python imports
+import copy
 
 # Third party imports
 import RPi.GPIO as GPIO
@@ -39,6 +42,8 @@ class GpioHandler:
         the GPIOs change.
         """
 
+        self.__onGpioChange = onGpioChange
+        
         # Set RPi.GPIO module to use board numbering. 
         GPIO.setmode(GPIO.BOARD)
 
@@ -57,12 +62,15 @@ class GpioHandler:
                 " defines prohibited GPIO pins.")
 
         gpioOut = set(
-		[self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]])
+		    [self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]])
         if gpioSet.intersection(gpioOut):
             raise ValueError(
                 "Configuration error. " +
                 SentinelConfig.JSON_MEAS_CONTROL_OUTPUT + 
                 " defines prohibited GPIO pins.")
+
+        # Init bit field, that identifies the active measurement.
+        self.__measConfBitField = 0
 
         # Get output states of measurement configurations.
         measConfs = configObject.getConfig(
@@ -101,12 +109,23 @@ class GpioHandler:
         Stops the GPIO listeners and cleans GPIO settings.
         """
 
+        channels = self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]
+        for channel in channels:
+            GPIO.remove_event_detect(channel)
+
         GPIO.cleanup()
 
     def __handleOutput(self):
         """
         Sets output pin according to active measurment configuration.
         """
+
+        # Get output state from measurment configuration.
+        outputState = self.__outputStates[self.__measConfBitField]
+
+        GPIO.output(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
+            outputState)
 
     def __cbGpioChanged(self, channel):
         """
@@ -118,4 +137,18 @@ class GpioHandler:
         channels (int): The GPIO pin that changed.
         """
 
-        print("Event on" + str(channel) + "detected.")
+        # Get new channel value.
+        value = GPIO.input(channel)
+
+        # Determine new bit field value.
+        position = \
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_SEL]\
+                .index(channel)     
+        self.__measConfBitField = self.__measConfBitField | (value << position)
+
+        # Handle output to comply to the new measurement configuration.
+        self.__handleOutput()
+
+        # Send message to DataAcquisition object, to switch to new measurement
+        # configuration.
+        self.self.__onGpioChange(copy.deepcopy(self.__measConfBitField))

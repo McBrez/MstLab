@@ -33,6 +33,6 @@
     ],
     "MeasurementControl" : {
         "MeasConfigSelectionGpio" : [3],
-        "MeasConfigOutputGpio" : 4  
+        "MeasConfigOutputGpio" : 7
     }
 }
