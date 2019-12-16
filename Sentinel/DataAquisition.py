@@ -166,15 +166,22 @@ class DataAquisition(threading.Thread):
 
         # Stop Acquisition loop and wait until it finishes. The timeout is 
         # generated from the currently active scanRate. If longer than 
-        # 1.5 * scanRate is waited, an exception is raised.
+        # 10 * scanRate is waited, an exception is raised.
         self.__runThread = False
-        self.join(timeout = 1.5 * scanRate / 1000.0)
-
+        self.join(timeout = 10 * scanRate / 1000.0)
+        
+        if self.is_alive():
+            # Thread is still alive, when it already should have terminated.
+            # Raise an exception.
+            raise Exception("DataAquisition working loop could not terminate")
+        
         print("Changed measurement configuration to " + str(measConfIdx))
 
         # Restart thread.
         self.__runThread = True
         self.start()
+
+        print("Thread started.")
 
         # Release lock
         self.__changeMeasConfSem.release()

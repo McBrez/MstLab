@@ -135,10 +135,8 @@ class GpioHandler:
 
         channels (int): The GPIO pin that changed.
         """
-
-        # Get new channel value. It has to be inverted, because we use pull up
-        # resistors.
-        value = not GPIO.input(channel)
+        
+        value = GPIO.input(channel)
         print("Got value from " + str(channel) + ". It is: " + str(value) )
 
         # Determine new bit field value.
