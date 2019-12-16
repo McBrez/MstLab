@@ -64,7 +64,7 @@ class Sentinel:
         self.gpioHandler = GpioHandler(
             self.configObject,
             self.dataAquisition.changeMeasConfig)
-	self.gpioHandler.start()
+        self.gpioHandler.start()
         # Start networking
 
         # Endless loop querying for STRG + C.
