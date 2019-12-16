@@ -28,7 +28,7 @@ from daqhats_utils import select_hat_device, enum_mask_to_string,\
 # Project imports
 from SentinelConfig import SentinelConfig
 
-class DataAquisition(threading.Thread):
+class DataAquisition:
     """
     Encapsulates the data aquisition functions. Inherits from threading.Thread, 
     so the aquisition can run parallely in a separate thread.
@@ -56,8 +56,11 @@ class DataAquisition(threading.Thread):
             and take a storeObj. 
         """
 
-        # Call constructor of super class.
-        threading.Thread.__init__(self)
+        # Register worker function as Thread
+        self.__workerThread = threading.Thread(
+            group = None,
+            target = self.__workerFunction,
+            name = "AcquisitionThread")
 
         # Load configuration objects.
         self.__configObject = configObject
@@ -81,13 +84,19 @@ class DataAquisition(threading.Thread):
         # to self.changeMeasConfig() at a time is possible
         self.__changeMeasConfSem = threading.Semaphore(value = 1)
 
-    def run(self):
+    def start(self):
+        """
+        Starts to worker thread
+        """
+
+        self.__runThread = True
+        self.__workerThread.start()
+
+    def __workerFunction(self):
         """
         Worker function, that can be called as thread. Initializes measurement
         config and contains measurment loop.  
         """
-
-        self.__runThread = True
 
         # Get constant for single shot read.
         options = OptionFlags.DEFAULT
@@ -166,21 +175,24 @@ class DataAquisition(threading.Thread):
 
         # Stop Acquisition loop and wait until it finishes. The timeout is 
         # generated from the currently active scanRate. If longer than 
-        # 10 * scanRate is waited, an exception is raised.
+        # 2 * scanRate is waited, an exception is raised.
         self.__runThread = False
-        self.join(timeout = 10 * scanRate / 1000.0)
+        self.workerThread.join(timeout = 2 * scanRate / 1000.0)
         
         if self.is_alive():
             # Thread is still alive, when it already should have terminated.
             # Raise an exception.
             raise Exception("DataAquisition working loop could not terminate")
-        
+
         print("Changed measurement configuration to " + str(measConfIdx))
 
         # Restart thread.
         self.__runThread = True
-        self.start()
-
+        self.__workerThread = threading.Thread(
+            group = None,
+            target = self.__workerFunction,
+            name = "AcquisitionThread")
+        self.__workerThread.start()
         print("Thread started.")
 
         # Release lock
@@ -192,7 +204,7 @@ class DataAquisition(threading.Thread):
         """
 
         self.__runThread = False
-        self.join()
+        self.__workerThread.join()
         return
 
     def __doCalculation(self, expr, channelDict, channelValues):
