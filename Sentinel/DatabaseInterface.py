@@ -80,6 +80,9 @@ class DatabaseInterface:
         # DatabaseInterface will write the contents of valueCache back to 
         # database, if the configured write intervall elapsed. 
         self.valueCache = {}
+
+        # Controlls the worker loop.
+        self.__runThread = False
     
     def start(self):
         """
@@ -95,6 +98,7 @@ class DatabaseInterface:
             return False
         
         # Start worker thread.
+        self.__runThread = True
         self.__workerThread.start()
         return True
 
@@ -106,7 +110,11 @@ class DatabaseInterface:
         Returns:
         True is stopped successfully. False otherwise.
         """
-        return False
+
+        self.__runThread = True
+        self.__workerThread.join()
+        self.dbConnection.close()    
+        
 
     def storeFunction(self, measurement, value):
         """
@@ -170,7 +178,7 @@ class DatabaseInterface:
                 c.execute(query)
 
         # Enter writeback loop.
-        while(True):
+        while(self.__runThread):
             # Call __writeback every storageIntervall milliseconds.
             time.sleep(self.storageIntervall/1000.0)
             self.__writeback()
@@ -209,12 +217,3 @@ class DatabaseInterface:
             # Commit changes to DB and release semaphore.
             self.dbConnection.commit()
             self.__writeSemaphore.release()
-
-    # def addTestData(self):
-    #     self.valueCache["TestConfig_TestMeasurement1"] = {}
-    #     self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp1"] = 1.1
-    #     self.valueCache["TestConfig_TestMeasurement1"]["someTimeStamp2"] = 2.2
-
-    #     self.valueCache["TestConfig_TestMeasurement2"] = {}
-    #     self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp1"] = 3.3
-    #     self.valueCache["TestConfig_TestMeasurement2"]["someTimeStamp2"] = 3.3

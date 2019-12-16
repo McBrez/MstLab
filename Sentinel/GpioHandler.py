@@ -151,4 +151,4 @@ class GpioHandler:
 
         # Send message to DataAcquisition object, to switch to new measurement
         # configuration.
-        self.self.__onGpioChange(copy.deepcopy(self.__measConfBitField))
+        self.__onGpioChange(copy.deepcopy(self.__measConfBitField))

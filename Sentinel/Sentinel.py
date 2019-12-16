@@ -72,7 +72,13 @@ class Sentinel:
         try:
             input()
         except KeyboardInterrupt:
-            print("Sentinel stopped.")
+            print("Sentinel stop issued.")
+
+        # Stop all modules.
+        self.databaseInterface.stop()
+        self.dataAquisition.stop()
+        self.gpioHandler.stop()
+        print("Sentinel has stopped.")
 
 if __name__ == '__main__':
     mainClass = Sentinel(Sentinel.CONFIG_FILE_NAME)

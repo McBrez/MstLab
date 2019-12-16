@@ -162,7 +162,7 @@ class DataAquisition(threading.Thread):
         self.join(timeout = 1.5 * scanRate / 1000.0)
 
         print("Changed measurement configuration to " + str(measConfIdx))
-        
+
         # Restart thread.
         self.__runThread = True
         self.start()
@@ -173,6 +173,7 @@ class DataAquisition(threading.Thread):
         """
 
         self.__runThread = False
+        self.join()
         return
 
     def __doCalculation(self, expr, channelDict, channelValues):
