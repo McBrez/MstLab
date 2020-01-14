@@ -216,7 +216,9 @@ class DataAquisition:
             # The Values that are popped during one while loop iteration are 
             # considered as concurrent.
             channelValues = {}
-            for chanTag in self.__currChannelDict.values():
+            reversedList = self.__currChannelDict.values()
+            reversedList.reverse()
+            for chanTag in reversedList:
                 channelValues[chanTag] = self.__acquiredData.data.pop()
 
             # Calculate timestamp for current channelVAlues by starting from the
