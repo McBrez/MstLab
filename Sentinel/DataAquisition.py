@@ -17,7 +17,7 @@ from __future__ import print_function
 from sys import stdout
 from time import sleep
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 import parser
 
 # MC118 imports
@@ -107,7 +107,7 @@ class DataAquisition:
         self.__acquiredData = 0
     
         # Current scan rate.
-        self.__currScanRate = 0.0
+        self.__currScanRate = 0
 
         # Timestamp of the last set of acquired data.
         self.__currTimestamp = datetime.now()
@@ -160,7 +160,7 @@ class DataAquisition:
         hat.a_in_scan_start(
             channel_mask  = channel_mask,
             samples_per_channel = int(self.__currScanRate),
-            sample_rate_per_channel = self.__currScanRate,
+            sample_rate_per_channel = float(self.__currScanRate),
             options = OptionFlags.CONTINUOUS)
 
         # Measurement loop.
@@ -205,10 +205,10 @@ class DataAquisition:
         elif self.__acquiredData.buffer_overrun:
             print('\n\nBuffer overrun\n')
             return
-
+        print (str(len(self.__acquiredData.data)) + " Samples acquired.")
         # Pop from acquired data, until it is empty.
         loopCount = 0
-        while len(self.__acquiredData) != 0:
+        while len(self.__acquiredData.data) > 0:
             # Pop once for every configured channel. More recent values have 
             # higher indices. Values from different channels are ordered 
             # sequentially in the list. I.e for 4 channels -> 
@@ -216,7 +216,7 @@ class DataAquisition:
             # The Values that are popped during one while loop iteration are 
             # considered as concurrent.
             channelValues = {}
-            reversedList = self.__currChannelDict.values()
+            reversedList = list(self.__currChannelDict.values())
             reversedList.reverse()
             for chanTag in reversedList:
                 channelValues[chanTag] = self.__acquiredData.data.pop()
@@ -224,8 +224,8 @@ class DataAquisition:
             # Calculate timestamp for current channelVAlues by starting from the
             # original timestamp, and then subtracting the sample intervall 
             # multiplied by the loop iteration count.
-            offset = (1.0 / self.__currScanRate) * loopCount
-            timestampDelta = datetime.timedelta(usec = offset)
+            offset = (1.0 / self.__currScanRate) * loopCount / 1000000.0
+            timestampDelta = timedelta(microseconds = offset)
             reproducedTimestamp = self.__currTimestamp - timestampDelta
 
             # Execute configured measurement calculations with the set of 
@@ -239,8 +239,11 @@ class DataAquisition:
                 # Hand calculated value over to database interface.
                 measurementName = \
                     self.__currMeasurementConfigName + "_" + name
-                valueCache = dict([(reproducedTimestamp,value)])
+                valueCache = dict([(reproducedTimestamp.isoformat(),value)])
                 self.__storeFunc(measurementName, valueCache)
+
+            loopCount = loopCount + 1
+        print(str(loopCount) + "loop iterations done")
 
     def changeMeasConfig(self, measConfIdx):
         """
