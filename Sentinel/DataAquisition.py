@@ -198,14 +198,26 @@ class DataAquisition:
         tracing back 1/__currScanRate seconds for each acquired value.
         """
 
-        # Check for an overrun error
+        # Check for an overrun error.
         if self.__acquiredData.hardware_overrun:
             print('\n\nHardware overrun\n')
             return
         elif self.__acquiredData.buffer_overrun:
             print('\n\nBuffer overrun\n')
             return
-        print (str(len(self.__acquiredData.data)) + " Samples acquired.")
+
+
+        # Create resultDict, that is used as structure that is handed over to
+        # database interface. Each active calculation must exist as a key in 
+        # this dict and has to point to another dict.
+        resultDict = {}
+        for name, expr in self.__currCalculations.items():
+            measurementName = \
+                self.__currMeasurementConfigName + "_" + name
+            resultDict[measurementName] = {}
+
+
+        print("Got " + str(len(self.__acquiredData.data)) + " Samples from DAQ card")
         # Pop from acquired data, until it is empty.
         loopCount = 0
         while len(self.__acquiredData.data) > 0:
@@ -214,21 +226,23 @@ class DataAquisition:
             # sequentially in the list. I.e for 4 channels -> 
             # [1,2,3,4,1,2,3,4,...]
             # The Values that are popped during one while loop iteration are 
-            # considered as concurrent.
+            # considered as concurrent and there have the same timestamp.
             channelValues = {}
             reversedList = list(self.__currChannelDict.values())
             reversedList.reverse()
             for chanTag in reversedList:
                 channelValues[chanTag] = self.__acquiredData.data.pop()
 
-            # Calculate timestamp for current channelVAlues by starting from the
+            # Calculate timestamp for current channelValues by starting from the
             # original timestamp, and then subtracting the sample intervall 
             # multiplied by the loop iteration count.
+            # Offset from the original timestamp in micro seconds.
             offset = (1.0 / self.__currScanRate) * loopCount / 1000000.0
             timestampDelta = timedelta(microseconds = offset)
             reproducedTimestamp = self.__currTimestamp - timestampDelta
 
             # Execute configured measurement calculations with the set of 
+            # values.
             for name, expr in self.__currCalculations.items():
                 # Evaluate expression
                 value = self.__doCalculation(
@@ -236,14 +250,19 @@ class DataAquisition:
                     channelDict = self.__currChannelDict,
                     channelValues = channelValues)
 
-                # Hand calculated value over to database interface.
+                # Store calculated values in resultDict.
                 measurementName = \
                     self.__currMeasurementConfigName + "_" + name
-                valueCache = dict([(reproducedTimestamp.isoformat(),value)])
-                self.__storeFunc(measurementName, valueCache)
+                timestampIsoStr = reproducedTimestamp.isoformat()
+                resultDict[measurementName][timestampIsoStr] =\
+                    value
 
             loopCount = loopCount + 1
-        print(str(loopCount) + "loop iterations done")
+
+        print("Got " + str(loopCount) + " measurements.")
+        # Hand calculated and timestamped values over to database interface.
+        for measName, valueDict in resultDict.items():
+            self.__storeFunc(measName, valueDict)
 
     def changeMeasConfig(self, measConfIdx):
         """
