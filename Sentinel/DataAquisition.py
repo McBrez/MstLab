@@ -21,7 +21,7 @@ from datetime import datetime
 import parser
 
 # MC118 imports
-from daqhats import mcc118, OptionFlags, HatIDs, HatError, namedtuple
+from daqhats import mcc118, OptionFlags, HatIDs, HatError
 from daqhats_utils import select_hat_device, enum_mask_to_string,\
      chan_list_to_mask
 
@@ -104,7 +104,7 @@ class DataAquisition:
         self.__changeMeasConfSem = threading.Semaphore(value = 1)
 
         # Storage variable for acquired data.
-        self.__acquiredData = namedtuple()
+        self.__acquiredData = 0
     
         # Current scan rate.
         self.__currScanRate = 0.0
@@ -142,9 +142,9 @@ class DataAquisition:
         # Write configured channel numbers from configuration into 
         # channelNums and create a mask from it.
         channelNums = []
-        self.__CurrChannelDict = \
+        self.__currChannelDict = \
             self.__activeMeasConfig[SentinelConfig.JSON_MEASUREMENT_CHANNELS]
-        for channel in channelDict.keys():
+        for channel in self.__currChannelDict.keys():
             channelNums.append(int(channel))
         channel_mask = chan_list_to_mask(channelNums)
 
@@ -155,10 +155,12 @@ class DataAquisition:
         # Cleanup scanning ressources.
         hat.a_in_scan_cleanup()
 
-        # Trigger scanning.
+        # Trigger scanning. samples_per_channel is set to the scan rate, so 
+        # buffer size is big enough to caputre one second worth of samples.
         hat.a_in_scan_start(
             channel_mask  = channel_mask,
-            scan_rate = self.__currScanRate,
+            samples_per_channel = self.__currScanRate,
+            sample_rate_per_channel = self.__currScanRate,
             options = OptionFlags.CONTINUOUS)
 
         # Measurement loop.
@@ -184,7 +186,7 @@ class DataAquisition:
             self.__storageThread.start()
 
         # Stop scanning.
-        hat.a_in_scan_start()
+        hat.a_in_scan_stop()
 
     def __storageFunction(self):
         """
@@ -214,8 +216,8 @@ class DataAquisition:
             # The Values that are popped during one while loop iteration are 
             # considered as concurrent.
             channelValues = {}
-            for chanNum, chanTag in self.__currChannelDict.items().reverse():
-                channelValues[chanTag] = self.__acquiredData.pop()
+            for chanTag in self.__currChannelDict.values().reverse():
+                channelValues[chanTag] = self.__acquiredData.data.pop()
 
             # Calculate timestamp for current channelVAlues by starting from the
             # original timestamp, and then subtracting the sample intervall 
@@ -235,7 +237,7 @@ class DataAquisition:
                 # Hand calculated value over to database interface.
                 measurementName = \
                     self.__currMeasurementConfigName + "_" + name
-                valueCache = dict([(timestamp-timestampDelta,value)])
+                valueCache = dict([(reproducedTimestamp,value)])
                 self.__storeFunc(measurementName, valueCache)
 
     def changeMeasConfig(self, measConfIdx):
@@ -276,7 +278,7 @@ class DataAquisition:
         self.__runThread = True
         self.__workerThread = threading.Thread(
             group = None,
-            target = self.__workerFunction,
+            target = self.__scanningFunction,
             name = "AcquisitionThread")
         self.__workerThread.start()
         print("Thread started.")
