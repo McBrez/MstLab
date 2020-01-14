@@ -159,7 +159,7 @@ class DataAquisition:
         # buffer size is big enough to caputre one second worth of samples.
         hat.a_in_scan_start(
             channel_mask  = channel_mask,
-            samples_per_channel = self.__currScanRate,
+            samples_per_channel = int(self.__currScanRate),
             sample_rate_per_channel = self.__currScanRate,
             options = OptionFlags.CONTINUOUS)
 
@@ -216,7 +216,7 @@ class DataAquisition:
             # The Values that are popped during one while loop iteration are 
             # considered as concurrent.
             channelValues = {}
-            for chanTag in self.__currChannelDict.values().reverse():
+            for chanTag in self.__currChannelDict.values():
                 channelValues[chanTag] = self.__acquiredData.data.pop()
 
             # Calculate timestamp for current channelVAlues by starting from the
