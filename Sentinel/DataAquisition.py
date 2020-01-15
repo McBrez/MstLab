@@ -17,6 +17,7 @@ from __future__ import print_function
 from sys import stdout
 from time import sleep
 import threading
+from multiprocessing import Process
 from datetime import datetime, timedelta
 import parser
 
@@ -62,7 +63,7 @@ class DataAquisition:
         """
 
         # Register worker function as Thread.
-        self.__workerThread = threading.Thread(
+        self.__workerThread = Process(
             group = None,
             target = self.__scanningFunction,
             name = "AcquisitionThread")
@@ -175,15 +176,22 @@ class DataAquisition:
             # Add data and timestamp tuple to instance variable.
             self.__acquiredData[timestamp] = acquiredData
 
+            # Before starting the new worker thread, weed out threads that 
+            # already have finished.
+            for key, val in self.__processingThreadsDict.items():
+                if not val.is_alive():
+                    del self.__processingThreadsDict[key]
+                    
             # Define storage function thread object, start it and append it to 
             # thread list.
-            tempThread = threading.Thread(
+            tempThread = Process(
                 group = None,
                 target = self.__processingFunction,
                 name = "processingThread",
                 args = (timestamp))
             tempThread.start()
             self.__processingThreadsDict[timestamp] = tempThread
+
             print("Currently active threads: " + str(len(self.__processingThreadsDict.keys())))
 
         # Stop scanning.
@@ -270,7 +278,6 @@ class DataAquisition:
         # Processing of data finished. Delete corresponding values from 
         # __acquiredData dict and remove thread from thread dict.
         del self.__acquiredData[timestamp]
-        del self.__processingThreadsDict[timestamp]
 
     def changeMeasConfig(self, measConfIdx):
         """
