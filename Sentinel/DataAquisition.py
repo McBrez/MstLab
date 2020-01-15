@@ -55,6 +55,7 @@ class DataAquisition:
         Parameters:
             configObject (DataAquisitionConfig): Contains the configuration for 
             creation of this object.
+
             storeFunc ((void)(storeObj)): A refernce to function, that is called
             to store the aquired data. The store function should return nothing,
             and take a storeObj. 
@@ -66,11 +67,9 @@ class DataAquisition:
             target = self.__scanningFunction,
             name = "AcquisitionThread")
 
-        # Register storage function as Thread.
-        self.__storageThread = threading.Thread(
-            group = None,
-            target = self.__storageFunction,
-            name = "StorageThread")
+        # Dict of Thread objects, that execute __processingFunction(). The key
+        # is a timestamp of the point in time the thread has been started.
+        self.__processingThreadsDict = {}
 
         # Load configuration objects.
         self.__configObject = configObject
@@ -78,11 +77,8 @@ class DataAquisition:
             self.__configObject.getConfig(
                 SentinelConfig.JSON_MEASUREMENT_CONFIG)
         
-        # Set the storage function.
+        # Set the Database interface storage function.
         self.__storeFunc = storeFunc
-
-        # Init value cache
-        self.__valueCache = {}  
 
         # Flag that indicates, that the worker thread loop shall be executed.
         self.__runThread = False 
@@ -103,14 +99,12 @@ class DataAquisition:
         # to self.changeMeasConfig() at a time is possible
         self.__changeMeasConfSem = threading.Semaphore(value = 1)
 
-        # Storage variable for acquired data.
-        self.__acquiredData = 0
+        # Storage dict for acquired data. Maps from timestamps to a namedtuple
+        # object that contains the acquired data.
+        self.__acquiredData = {}
     
         # Current scan rate.
         self.__currScanRate = 0
-
-        # Timestamp of the last set of acquired data.
-        self.__currTimestamp = datetime.now()
 
         # Dictionary that maps Channel number to tag name.
         self.__currChannelDict = {}
@@ -171,38 +165,49 @@ class DataAquisition:
             sleep(DataAquisition.__SCAN_SLEEP_TIME)
 
             # Read all available samples from all channels. Timeout is ignored.
-            self.__acquiredData = hat.a_in_scan_read(
+            acquiredData = hat.a_in_scan_read(
                 samples_per_channel = DataAquisition.READ_ALL_AVAILABLE,
                 timeout = 0)
 
             # Get current timestamp.
-            self.__currTimestamp = datetime.now()
+            timestamp = datetime.now()
 
-            # Redefine storage function thread object and start it.
-            self.__storageThread = threading.Thread(
+            # Add data and timestamp tuple to instance variable.
+            self.__acquiredData[timestamp] = acquiredData
+
+            # Define storage function thread object, start it and append it to 
+            # thread list.
+            tempThread = threading.Thread(
                 group = None,
-                target = self.__storageFunction,
-                name = "StorageThread")     
-            self.__storageThread.start()
+                target = self.__processingFunction,
+                name = "processingThread",
+                args = (timestamp))
+            tempThread.start()
+            self.__processingThreadsDict[timestamp] = tempThread
+            print("Currently active threads: " + str(len(self.__processingThreadsDict.keys())))
 
         # Stop scanning.
         hat.a_in_scan_stop()
 
-    def __storageFunction(self):
+    def __processingFunction(self, timestamp):
         """
         Worker function, that is called by __scanningFunction() as a thread, to
         trigger data processing and storage of acquired data. Data and 
-        additional information is taken from the __acquiredData, 
-        __currScanRate and __currTimestamp instance variables. The timestamps of
-        the single acquired valus is reproduced by taking __currTimestamp and
-        tracing back 1/__currScanRate seconds for each acquired value.
+        additional information is taken from the __acquiredData and
+        __currScanRate instance variables. The timestamps of the single acquired
+        values is reproduced by taking __currTimestamp and tracing back 
+        1/__currScanRate seconds for each acquired value.
+
+        Parameters:
+        timestamp (datetime): The timestamp the call to this function is 
+        associated with.
         """
 
         # Check for an overrun error.
-        if self.__acquiredData.hardware_overrun:
+        if self.__acquiredData[timestamp].hardware_overrun:
             print('\n\nHardware overrun\n')
             return
-        elif self.__acquiredData.buffer_overrun:
+        elif self.__acquiredData[timestamp].buffer_overrun:
             print('\n\nBuffer overrun\n')
             return
 
@@ -216,11 +221,9 @@ class DataAquisition:
                 self.__currMeasurementConfigName + "_" + name
             resultDict[measurementName] = {}
 
-
-        print("Got " + str(len(self.__acquiredData.data)) + " Samples from DAQ card")
         # Pop from acquired data, until it is empty.
         loopCount = 0
-        while len(self.__acquiredData.data) > 0:
+        while len(self.__acquiredData[timestamp].data) > 0:
             # Pop once for every configured channel. More recent values have 
             # higher indices. Values from different channels are ordered 
             # sequentially in the list. I.e for 4 channels -> 
@@ -231,7 +234,8 @@ class DataAquisition:
             reversedList = list(self.__currChannelDict.values())
             reversedList.reverse()
             for chanTag in reversedList:
-                channelValues[chanTag] = self.__acquiredData.data.pop()
+                channelValues[chanTag] = \
+                    self.__acquiredData[timestamp].data.pop()
 
             # Calculate timestamp for current channelValues by starting from the
             # original timestamp, and then subtracting the sample intervall 
@@ -239,7 +243,7 @@ class DataAquisition:
             # Offset from the original timestamp in micro seconds.
             offset = (1.0 / self.__currScanRate) * loopCount / 1000000.0
             timestampDelta = timedelta(microseconds = offset)
-            reproducedTimestamp = self.__currTimestamp - timestampDelta
+            reproducedTimestamp = timestamp - timestampDelta
 
             # Execute configured measurement calculations with the set of 
             # values.
@@ -254,8 +258,7 @@ class DataAquisition:
                 measurementName = \
                     self.__currMeasurementConfigName + "_" + name
                 timestampIsoStr = reproducedTimestamp.isoformat()
-                resultDict[measurementName][timestampIsoStr] =\
-                    value
+                resultDict[measurementName][timestampIsoStr] = value
 
             loopCount = loopCount + 1
 
@@ -263,6 +266,11 @@ class DataAquisition:
         # Hand calculated and timestamped values over to database interface.
         for measName, valueDict in resultDict.items():
             self.__storeFunc(measName, valueDict)
+        
+        # Processing of data finished. Delete corresponding values from 
+        # __acquiredData dict and remove thread from thread dict.
+        del self.__acquiredData[timestamp]
+        del self.__processingThreadsDict[timestamp]
 
     def changeMeasConfig(self, measConfIdx):
         """
