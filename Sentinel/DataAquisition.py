@@ -16,8 +16,7 @@
 from __future__ import print_function
 from sys import stdout
 from time import sleep
-import threading
-from multiprocessing import Process
+from multiprocessing import Process, Semaphore
 from datetime import datetime, timedelta
 import parser
 
@@ -98,7 +97,7 @@ class DataAquisition:
 
         # A semaphore is needed on confugration change, so only one one call 
         # to self.changeMeasConfig() at a time is possible
-        self.__changeMeasConfSem = threading.Semaphore(value = 1)
+        self.__changeMeasConfSem = Semaphore(value = 1)
 
         # Storage dict for acquired data. Maps from timestamps to a namedtuple
         # object that contains the acquired data.
@@ -178,9 +177,12 @@ class DataAquisition:
 
             # Before starting the new worker thread, weed out threads that 
             # already have finished.
+            deleteKeys = []
             for key, val in self.__processingThreadsDict.items():
                 if not val.is_alive():
-                    del self.__processingThreadsDict[key]
+                    deleteKeys.append(key)
+            for key in deleteKeys:
+                del self.__processingThreadsDict[key]
                     
             # Define storage function thread object, start it and append it to 
             # thread list.
@@ -188,7 +190,7 @@ class DataAquisition:
                 group = None,
                 target = self.__processingFunction,
                 name = "processingThread",
-                args = (timestamp))
+                args = (timestamp,))
             tempThread.start()
             self.__processingThreadsDict[timestamp] = tempThread
 
