@@ -16,7 +16,7 @@
 from __future__ import print_function
 from sys import stdout
 from time import sleep
-from multiprocessing import Process, Semaphore
+from multiprocessing import Process, Semaphore, Pool
 from datetime import datetime, timedelta
 import parser
 
@@ -67,9 +67,14 @@ class DataAquisition:
             target = self.__scanningFunction,
             name = "AcquisitionThread")
 
-        # Dict of Thread objects, that execute __processingFunction(). The key
-        # is a timestamp of the point in time the thread has been started.
-        self.__processingThreadsDict = {}
+        # Register Timer thread that switchs measurment configuration.
+        self.__timerThread = Process(
+            group = None,
+            name = "DataAquisitionTimerThread",
+            target = self.__timerThread)
+
+        # Init the worker process pool for __processingFunction().
+        self.__processingWorkerPool = Pool(processes=8)
 
         # Load configuration objects.
         self.__configObject = configObject
@@ -77,7 +82,13 @@ class DataAquisition:
             self.__configObject.getConfig(
                 SentinelConfig.JSON_MEASUREMENT_CONFIG)
         
-        # Set the Database interface storage function.
+        # Get the measurement configuration switch timer.
+        self.__measConfSwitchTimerIntervall = \
+          self.__configObject\
+              [SentinelConfig.JSON_MEAS_CONTROL]\
+              [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_TIMER]
+
+        # Register the function to the database interface.
         self.__storeFunc = storeFunc
 
         # Flag that indicates, that the worker thread loop shall be executed.
@@ -174,27 +185,11 @@ class DataAquisition:
 
             # Add data and timestamp tuple to instance variable.
             self.__acquiredData[timestamp] = acquiredData
-
-            # Before starting the new worker thread, weed out threads that 
-            # already have finished.
-            deleteKeys = []
-            for key, val in self.__processingThreadsDict.items():
-                if not val.is_alive():
-                    deleteKeys.append(key)
-            for key in deleteKeys:
-                del self.__processingThreadsDict[key]
-                    
-            # Define storage function thread object, start it and append it to 
-            # thread list.
-            tempThread = Process(
-                group = None,
-                target = self.__processingFunction,
-                name = "processingThread",
-                args = (timestamp,))
-            tempThread.start()
-            self.__processingThreadsDict[timestamp] = tempThread
-
-            print("Currently active threads: " + str(len(self.__processingThreadsDict.keys())))
+                   
+            # Push workload to processing pool.
+            self.__processingWorkerPool.apply_async(
+                self.__processingFunction,
+                (timestamp,))
 
         # Stop scanning.
         hat.a_in_scan_stop()
@@ -283,8 +278,10 @@ class DataAquisition:
 
     def changeMeasConfig(self, measConfIdx):
         """
-        Triggered by an RasPi GPIO value change. Changes the measurement
-        configuration accordingly.
+        Triggers a change of the active measurement confugartion. Waits until
+        the currently active scanning and processing threads terminate, and then
+        sets up the object to measure under the specified measurement 
+        configuration.
 
         measConfIdx (integer): The index of the measurement configuration, that
         shall be changed to.
@@ -317,7 +314,7 @@ class DataAquisition:
 
         # Restart thread.
         self.__runThread = True
-        self.__workerThread = threading.Thread(
+        self.__workerThread = Process(
             group = None,
             target = self.__scanningFunction,
             name = "AcquisitionThread")
@@ -365,3 +362,21 @@ class DataAquisition:
         
         # Evaluate expression
         return eval(expr)
+
+    def __timerThreadFunction(self):
+        """
+        Worker function, that switches measurement configuration after a user
+        specified amount of time.
+        """
+
+        # Sleep for the configured time.
+        sleep(self.__measConfSwitchTimerIntervall)
+
+        # Get the count of configured measurment configurations.
+        measConfCount = len(self.__measurementConfig)
+        
+        # Calculate the new measurment config index by incrementing.
+        newMeasConfIdx = (self.__activeMeasConfigIdx + 1) % measConfCount
+        
+        # Trigger change of measurment configuration.
+        self.changeMeasConfig(newMeasConfIdx)
