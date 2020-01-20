@@ -126,6 +126,7 @@ class DatabaseInterface:
 
         self.__runThread = False
         self.__workerThread.join() 
+        self.__listenerThread.join()
 
     def storeFunction(self):
         """
@@ -143,7 +144,11 @@ class DatabaseInterface:
 
         while(self.__runThread):
             # Wait for input.
-            obj = self.__dbIfQueue.get()
+            try:
+                obj = self.__dbIfQueue.get()
+            except:
+                return
+                
             # Aquire lock
             self.__writeSemaphore.acquire()
             

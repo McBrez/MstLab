@@ -60,6 +60,14 @@ class DataAquisition:
             to store the aquired data. The store function should return nothing,
             and take a storeObj. 
         """
+        # Load configuration objects.
+        self.__configObject = configObject
+        self.__measurementConfig = \
+            self.__configObject.getConfig(
+                SentinelConfig.JSON_MEASUREMENT_CONFIG)
+        self.__measurementControl = \
+            self.__configObject.getConfig(
+                SentinelConfig.JSON_MEAS_CONTROL)
 
         # Register worker function as Thread.
         self.__workerThread = threading.Thread(
@@ -71,16 +79,18 @@ class DataAquisition:
         # has CPU cores.
         self.__processingWorkerPool = Pool()
 
-        # Dict of Thread objects, that execute __processingFunction(). The key
-        # is a timestamp of the point in time the thread has been started.
-        self.__processingThreadsDict = {}
+        # The time a single measurment configuration is active. After that, 
+        # It gets changed to the next measurment configuration.
+        self.__measConfSwitchTimerIntervall = \
+            self.__measurementControl \
+                [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_INT] 
 
-        # Load configuration objects.
-        self.__configObject = configObject
-        self.__measurementConfig = \
-            self.__configObject.getConfig(
-                SentinelConfig.JSON_MEASUREMENT_CONFIG)
-        
+        # Register timer that is responsible for periodic changing of 
+        # measurement configuration.
+        self.__confChangeTimer = threading.Timer(
+            interval = self.__measConfSwitchTimerIntervall,
+            function = self.__confChangeFunc)
+      
         # Flag that indicates, that the worker thread loop shall be executed.
         self.__runThread = False 
 
@@ -120,6 +130,7 @@ class DataAquisition:
 
         self.__runThread = True
         self.__workerThread.start()
+        self.__confChangeTimer.start()
 
     def __scanningFunction(self):
         """
@@ -185,11 +196,13 @@ class DataAquisition:
             timestamp = datetime.now()
 
             # Push workload to worker pool.
-            async_obj = self.__processingWorkerPool.apply_async(
+            self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
                 args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
+       
         # Stop scanning.
         hat.a_in_scan_stop()
+        hat.a_in_scan_cleanup()
 
     @staticmethod
     def processingFunction(
@@ -213,59 +226,65 @@ class DataAquisition:
         associated with.
         """
 
-        # Create resultDict, that is used as structure that is handed over to
-        # database interface. Each active calculation must exist as a key in 
-        # this dict and has to point to another dict.
-        resultDict = {}
-        for name, expr in currCalculations.items():
-            measurementName = \
-                currMeasurementConfigName + "_" + name
-            resultDict[measurementName] = {}
-
-        # Pop from acquired data, until it is empty.
-        loopCount = 0
-        while len(data) > 0:
-            # Pop once for every configured channel. More recent values have 
-            # higher indices. Values from different channels are ordered 
-            # sequentially in the list. I.e for 4 channels -> 
-            # [1,2,3,4,1,2,3,4,...]
-            # The Values that are popped during one while loop iteration are 
-            # considered as concurrent and there have the same timestamp.
-            channelValues = {}
-            reversedList = list(currChannelDict.values())
-            reversedList.reverse()
-            for chanTag in reversedList:
-                channelValues[chanTag] = data.pop()
-
-            # Calculate timestamp for current channelValues by starting from the
-            # original timestamp, and then subtracting the sample intervall 
-            # multiplied by the loop iteration count.
-            # Offset from the original timestamp in micro seconds.
-            offset = (1.0 / currScanRate) * loopCount * 1000000.0
-            timestampDelta = timedelta(microseconds = offset)
-            reproducedTimestamp = timestamp - timestampDelta
-            timestampIsoStr = reproducedTimestamp.isoformat()
-            
-            # Execute configured measurement calculations with the set of 
-            # values.
+        try:
+            # Create resultDict, that is used as structure that is handed over
+            #  to database interface. Each active calculation must exist as a 
+            # key in this dict and has to point to another dict.
+            resultDict = {}
             for name, expr in currCalculations.items():
-                # Evaluate expression
-                value = DataAquisition.__doCalculation(
-                    expr = expr,
-                    channelDict = currChannelDict,
-                    channelValues = channelValues)
-
-                # Store calculated values in resultDict.
                 measurementName = \
                     currMeasurementConfigName + "_" + name
-                resultDict[measurementName][timestampIsoStr] = value
+                resultDict[measurementName] = {}
 
-            loopCount = loopCount + 1
+            # Construct delta time object for reconstruction of time stamps.
+            offset = (1.0 / currScanRate) * 1000000.0
+            timestampDelta = timedelta(microseconds = offset)
+            reproducedTimestamp = timestamp
+            # Pop from acquired data, until it is empty.
+            loopCount = 0
+            while len(data) > 0:
+                # Pop once for every configured channel. More recent values have 
+                # higher indices. Values from different channels are ordered 
+                # sequentially in the list. I.e for 4 channels -> 
+                # [1,2,3,4,1,2,3,4,...]
+                # The Values that are popped during one while loop iteration are 
+                # considered as concurrent and there have the same timestamp.
+                channelValues = {}
+                reversedList = list(currChannelDict.values())
+                reversedList.reverse()
+                for chanTag in reversedList:
+                    channelValues[chanTag] = data.pop()
 
-        print("Got " + str(loopCount) + " measurements.")
-        # Hand calculated and timestamped values over to database interface.
-        for measName, valueDict in resultDict.items():
-            queue.put_nowait((measName, valueDict))
+                # Calculate timestamp for current channelValues by starting from
+                # the original timestamp, and then subtracting the sample
+                # intervall multiplied by the loop iteration count. Offset from 
+                # the original timestamp in micro seconds.
+                reproducedTimestamp = reproducedTimestamp - timestampDelta
+                timestampIsoStr = reproducedTimestamp.isoformat()
+                
+                # Execute configured measurement calculations with the set of 
+                # values.
+                for name, expr in currCalculations.items():
+                    # Evaluate expression
+                    value = DataAquisition.__doCalculation(
+                        expr = expr,
+                        channelDict = currChannelDict,
+                        channelValues = channelValues)
+
+                    # Store calculated values in resultDict.
+                    measurementName = \
+                        currMeasurementConfigName + "_" + name
+                    resultDict[measurementName][timestampIsoStr] = value
+
+                loopCount = loopCount + 1
+
+            print("Got " + str(loopCount) + " measurements.")
+            # Hand calculated and timestamped values over to database interface.
+            for measName, valueDict in resultDict.items():
+                queue.put_nowait((measName, valueDict))
+        
+        except KeyboardInterrupt:
+            print("Processing worker stopped.")
 
     def changeMeasConfig(self, measConfIdx):
         """
@@ -285,9 +304,6 @@ class DataAquisition:
                 [self.__activeMeasConfigIdx]\
                 [SentinelConfig.JSON_MEASUREMENT_SCANRATE]
 
-        # Set new measurement configuration index.
-        self.__activeMeasConfigIdx = measConfIdx
-
         # Stop Acquisition loop and wait until it finishes. The timeout is 
         # generated from the currently active scanRate. If longer than 
         # 2 * scanRate is waited, an exception is raised.
@@ -299,6 +315,15 @@ class DataAquisition:
             # Raise an exception.
             raise Exception("DataAquisition working loop could not terminate")
 
+        # Wait on worker pool to finish.
+        self.__processingWorkerPool.close()
+        self.__processingWorkerPool.join()
+
+        # Redefine worker pool
+        self.__processingWorkerPool = Pool()
+
+        # Set new measurement configuration index.
+        self.__activeMeasConfigIdx = measConfIdx
         print("Changed measurement configuration to " + str(measConfIdx))
 
         # Restart thread.
@@ -320,6 +345,11 @@ class DataAquisition:
 
         self.__runThread = False
         self.__workerThread.join()
+        self.__confChangeTimer.cancel()
+        self.__processingWorkerPool.close()
+        self.__processingWorkerPool.join()
+        print("Stopped acquisition module")
+
         return
 
     @staticmethod
@@ -352,3 +382,19 @@ class DataAquisition:
         
         # Evaluate expression
         return eval(expr)
+
+    def __confChangeFunc(self):
+        """
+        Worker function, that switches measurement configuration after a user 
+        specified amount of time.
+        """
+        
+        if(self.__runThread):
+            # Get the count of configured measurment configurations.
+            measConfCount = len(self.__measurementConfig)
+
+            # Calculate the new measurement config index by incrementing.
+            newMeasConfIdx = (self.__activeMeasConfigIdx + 1) % measConfCount
+
+            # Trigger change of measurment configuration
+            self.changeMeasConfig(newMeasConfIdx)
