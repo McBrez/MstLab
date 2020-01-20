@@ -13,8 +13,8 @@ License:
 # Python imports
 import sqlite3
 from string import Template
-import threading
 import time
+from multiprocessing import Process, Semaphore 
 
 # Project imports
 from SentinelConfig import SentinelConfig
@@ -62,7 +62,7 @@ class DatabaseInterface:
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
         # Set up worker thread.
-        self.__workerThread = threading.Thread(
+        self.__workerThread = Process(
             group = None,
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
@@ -77,7 +77,7 @@ class DatabaseInterface:
         # A semaphore is needed, to avoid race conditions when this object is
         # trying to write back to databse, and another module is adding values
         # to the value cache.
-        self.__writeSemaphore = threading.Semaphore(value = 1)
+        self.__writeSemaphore = Semaphore(value = 1)
 
         # Boolean that signals wether this object is connected to a database.
         self.__connected = False
