@@ -75,6 +75,10 @@ class SentinelConfig:
     # the currently active measurement configuration.
     JSON_MEAS_CONTROL_OUTPUT = "MeasConfigOutputGpio"
 
+    # An integer, that specifies the intervall, in which the measurment 
+    # configuration is changed. Intepreted as in seconds.
+    JSON_MEAS_CONTROL_SWITCH_INT = "MeasConfSwitchTimer"
+
     def __init__(self, configFileName):
         """
         Reads in the JSON file given with configFileName, and constructs the 
