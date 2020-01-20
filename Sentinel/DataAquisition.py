@@ -14,10 +14,9 @@
 
 # Python imports
 from __future__ import print_function
-from sys import stdout
 from time import sleep
 import threading
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 from datetime import datetime, timedelta
 import parser
 
@@ -47,7 +46,7 @@ class DataAquisition:
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, storeFunc):
+    def __init__(self, configObject, dbIfQueue):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
@@ -63,10 +62,14 @@ class DataAquisition:
         """
 
         # Register worker function as Thread.
-        self.__workerThread = Process(
+        self.__workerThread = threading.Thread(
             group = None,
             target = self.__scanningFunction,
             name = "AcquisitionThread")
+
+        # Init Threading pool. As much processes will be spawned, as the machine
+        # has CPU cores.
+        self.__processingWorkerPool = Pool()
 
         # Dict of Thread objects, that execute __processingFunction(). The key
         # is a timestamp of the point in time the thread has been started.
@@ -78,9 +81,6 @@ class DataAquisition:
             self.__configObject.getConfig(
                 SentinelConfig.JSON_MEASUREMENT_CONFIG)
         
-        # Set the Database interface storage function.
-        self.__storeFunc = storeFunc
-
         # Flag that indicates, that the worker thread loop shall be executed.
         self.__runThread = False 
 
@@ -109,6 +109,9 @@ class DataAquisition:
 
         # Dictionary that maps Channel number to tag name.
         self.__currChannelDict = {}
+
+        # The queue to the dbInterface.
+        self.__dbIfQueue = dbIfQueue
 
     def start(self):
         """
@@ -170,34 +173,33 @@ class DataAquisition:
                 samples_per_channel = DataAquisition.READ_ALL_AVAILABLE,
                 timeout = 0)
 
+            # Check for an overrun error.
+            if acquiredData.hardware_overrun:
+                print('\n\nHardware overrun\n')
+                continue
+            elif acquiredData.buffer_overrun:
+                print('\n\nBuffer overrun\n')
+                continue
+
             # Get current timestamp.
             timestamp = datetime.now()
 
-            # Add data and timestamp tuple to instance variable.
-            self.__acquiredData[timestamp] = acquiredData
-
-            # Before starting the new worker thread, weed out threads that 
-            # already have finished.
-            for key, val in self.__processingThreadsDict.items():
-                if not val.is_alive():
-                    del self.__processingThreadsDict[key]
-                    
-            # Define storage function thread object, start it and append it to 
-            # thread list.
-            tempThread = Process(
-                group = None,
-                target = self.__processingFunction,
-                name = "processingThread",
-                args = (timestamp))
-            tempThread.start()
-            self.__processingThreadsDict[timestamp] = tempThread
-
-            print("Currently active threads: " + str(len(self.__processingThreadsDict.keys())))
-
+            # Push workload to worker pool.
+            async_obj = self.__processingWorkerPool.apply_async(
+                func = DataAquisition.processingFunction,
+                args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
         # Stop scanning.
         hat.a_in_scan_stop()
 
-    def __processingFunction(self, timestamp):
+    @staticmethod
+    def processingFunction(
+        timestamp,
+        data,
+        queue,
+        currCalculations,
+        currMeasurementConfigName,
+        currChannelDict,
+        currScanRate):
         """
         Worker function, that is called by __scanningFunction() as a thread, to
         trigger data processing and storage of acquired data. Data and 
@@ -211,27 +213,18 @@ class DataAquisition:
         associated with.
         """
 
-        # Check for an overrun error.
-        if self.__acquiredData[timestamp].hardware_overrun:
-            print('\n\nHardware overrun\n')
-            return
-        elif self.__acquiredData[timestamp].buffer_overrun:
-            print('\n\nBuffer overrun\n')
-            return
-
-
         # Create resultDict, that is used as structure that is handed over to
         # database interface. Each active calculation must exist as a key in 
         # this dict and has to point to another dict.
         resultDict = {}
-        for name, expr in self.__currCalculations.items():
+        for name, expr in currCalculations.items():
             measurementName = \
-                self.__currMeasurementConfigName + "_" + name
+                currMeasurementConfigName + "_" + name
             resultDict[measurementName] = {}
 
         # Pop from acquired data, until it is empty.
         loopCount = 0
-        while len(self.__acquiredData[timestamp].data) > 0:
+        while len(data) > 0:
             # Pop once for every configured channel. More recent values have 
             # higher indices. Values from different channels are ordered 
             # sequentially in the list. I.e for 4 channels -> 
@@ -239,33 +232,32 @@ class DataAquisition:
             # The Values that are popped during one while loop iteration are 
             # considered as concurrent and there have the same timestamp.
             channelValues = {}
-            reversedList = list(self.__currChannelDict.values())
+            reversedList = list(currChannelDict.values())
             reversedList.reverse()
             for chanTag in reversedList:
-                channelValues[chanTag] = \
-                    self.__acquiredData[timestamp].data.pop()
+                channelValues[chanTag] = data.pop()
 
             # Calculate timestamp for current channelValues by starting from the
             # original timestamp, and then subtracting the sample intervall 
             # multiplied by the loop iteration count.
             # Offset from the original timestamp in micro seconds.
-            offset = (1.0 / self.__currScanRate) * loopCount / 1000000.0
+            offset = (1.0 / currScanRate) * loopCount * 1000000.0
             timestampDelta = timedelta(microseconds = offset)
             reproducedTimestamp = timestamp - timestampDelta
-
+            timestampIsoStr = reproducedTimestamp.isoformat()
+            
             # Execute configured measurement calculations with the set of 
             # values.
-            for name, expr in self.__currCalculations.items():
+            for name, expr in currCalculations.items():
                 # Evaluate expression
-                value = self.__doCalculation(
+                value = DataAquisition.__doCalculation(
                     expr = expr,
-                    channelDict = self.__currChannelDict,
+                    channelDict = currChannelDict,
                     channelValues = channelValues)
 
                 # Store calculated values in resultDict.
                 measurementName = \
-                    self.__currMeasurementConfigName + "_" + name
-                timestampIsoStr = reproducedTimestamp.isoformat()
+                    currMeasurementConfigName + "_" + name
                 resultDict[measurementName][timestampIsoStr] = value
 
             loopCount = loopCount + 1
@@ -273,11 +265,7 @@ class DataAquisition:
         print("Got " + str(loopCount) + " measurements.")
         # Hand calculated and timestamped values over to database interface.
         for measName, valueDict in resultDict.items():
-            self.__storeFunc(measName, valueDict)
-        
-        # Processing of data finished. Delete corresponding values from 
-        # __acquiredData dict and remove thread from thread dict.
-        del self.__acquiredData[timestamp]
+            queue.put_nowait((measName, valueDict))
 
     def changeMeasConfig(self, measConfIdx):
         """
@@ -334,7 +322,8 @@ class DataAquisition:
         self.__workerThread.join()
         return
 
-    def __doCalculation(self, expr, channelDict, channelValues):
+    @staticmethod
+    def __doCalculation(expr, channelDict, channelValues):
         """
         Replaces the channel tags in the mathematical expression expr with 
         measurement values, given in channelValues.

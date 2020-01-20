@@ -11,6 +11,9 @@ from DatabaseInterface import DatabaseInterface
 from DataAquisition import DataAquisition
 from GpioHandler import GpioHandler
 
+# Python imports
+from multiprocessing import Manager, queues
+
 class Sentinel:
 
     # The name of the config file, that gets read in at start up.
@@ -27,11 +30,16 @@ class Sentinel:
         created.
         """
 
+        # Declare project object.
         self.configFile = configFile
         self.configObject = None
         self.databaseInterface = None
         self.dataAquisition = None
         self.gpioHandler = None
+
+        # Declare additional objects.
+        self.manager = None
+        self.commQueue = None
         return
 
     def main(self):
@@ -39,6 +47,13 @@ class Sentinel:
         Main method of the class. Starts the sentinel and all of its sub
         modules.
         """
+
+        # Init sync manager for managed queue.
+        self.manager = Manager()
+
+        # Init queue for communication between DataAcquisition and 
+        # DatabaseInterface module.
+        self.commQueue = self.manager.Queue()
 
         # Parse XML configuration file into a DataAquisitionConfig object.
         self.configObject = SentinelConfig(self.configFile)
@@ -48,7 +63,8 @@ class Sentinel:
 
         # Start database interface
         self.databaseInterface = DatabaseInterface(
-            self.configObject)
+            self.configObject,
+            self.commQueue)
 
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
@@ -57,7 +73,7 @@ class Sentinel:
         # Start data aquisition thread.
         self.dataAquisition = DataAquisition(
             self.configObject,
-            self.databaseInterface.storeFunction)
+             self.commQueue)
         self.dataAquisition.start()
 
         # Start GPIO handler.
@@ -65,7 +81,6 @@ class Sentinel:
             self.configObject,
             self.dataAquisition.changeMeasConfig)
         self.gpioHandler.start()
-        # Start networking
 
         # Waiting for STRG + C.
         print("Sentinel started. Press STRG + C to stop.")

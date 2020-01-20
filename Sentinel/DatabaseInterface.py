@@ -33,7 +33,7 @@ class DatabaseInterface:
         "INSERT INTO $tableName (timestamp, value) "
         "VALUES $valueList" )
 
-    def __init__(self, configObject):
+    def __init__(self, configObject, dbIfQueue):
         """
         Constructs the database interface. Does not create a database or connect
         to it. Before this object is operational, and data can be written to the
@@ -42,6 +42,9 @@ class DatabaseInterface:
         Parameters:
         configObject (SentinelConfig): The configuration data is extracted from
         this object.
+
+        dbIfQueue (Manager.Queue): A queue that is used for communication with 
+        the acquisition processes
         """
         
         # Get main configuration domains
@@ -64,6 +67,12 @@ class DatabaseInterface:
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
             daemon = None)
+
+        self.__listenerThread = threading.Thread(
+            group = None,
+            target = self.storeFunction,
+            name = 'listenerInterfaceWorker',
+            daemon = None)
         
         # A semaphore is needed, to avoid race conditions when this object is
         # trying to write back to databse, and another module is adding values
@@ -83,6 +92,9 @@ class DatabaseInterface:
 
         # Controlls the worker loop.
         self.__runThread = False
+
+        # The database interface queue from which data is pushed to this module.
+        self.__dbIfQueue = dbIfQueue
     
     def start(self):
         """
@@ -100,6 +112,7 @@ class DatabaseInterface:
         # Start worker thread.
         self.__runThread = True
         self.__workerThread.start()
+        self.__listenerThread.start()
         return True
 
         
@@ -113,8 +126,8 @@ class DatabaseInterface:
 
         self.__runThread = False
         self.__workerThread.join() 
-        
-    def storeFunction(self, measurement, value):
+
+    def storeFunction(self):
         """
         Used to queue measurement values for storage to database.
 
@@ -128,17 +141,23 @@ class DatabaseInterface:
         value tuples.
         """
 
-        # Aquire lock
-        self.__writeSemaphore.acquire()
-        
-        # Add dict to valueCache, if not already in valueCache
-        if measurement not in self.valueCache.keys():
-            self.valueCache[measurement] = {}
-        
-        self.valueCache[measurement].update(value)
+        while(self.__runThread):
+            # Wait for input.
+            obj = self.__dbIfQueue.get()
+            # Aquire lock
+            self.__writeSemaphore.acquire()
+            
+            measurement = obj[0]
+            value = obj[1]
 
-        # Everything has been done. Releae lock.
-        self.__writeSemaphore.release()
+            # Add dict to valueCache, if not already in valueCache
+            if measurement not in self.valueCache.keys():
+                self.valueCache[measurement] = {}
+            
+            self.valueCache[measurement].update(value)
+
+            # Everything has been done. Releae lock.
+            self.__writeSemaphore.release()
 
         return
 
@@ -183,6 +202,7 @@ class DatabaseInterface:
         
         # Close database connection, after writeback loop finished.
         self.dbConnection.close()
+        print("Database Connection closed")
 
     def __writeback(self):
         """
