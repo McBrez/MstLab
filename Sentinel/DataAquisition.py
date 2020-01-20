@@ -46,7 +46,7 @@ class DataAquisition:
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, dbIfQueue):
+    def __init__(self, configObject, dbIfQueue, gpioFunc):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
@@ -58,7 +58,13 @@ class DataAquisition:
 
             storeFunc ((void)(storeObj)): A refernce to function, that is called
             to store the aquired data. The store function should return nothing,
-            and take a storeObj. 
+            and take a storeObj.
+
+            dbIfQueue (Manager.Queue); A queue, used for communication with the
+            database interface
+
+            gpioFunc (void(int)): A function reference, that can be used to 
+            set the GPIO according to measurement configuration.
         """
 
         # Register worker function as Thread.
@@ -128,6 +134,8 @@ class DataAquisition:
         self.__measConfSwitchTimerIntervall = \
             self.__measurementControl \
                 [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_INT] 
+        
+        self.__gpioFunc = gpioFunc
 
     def start(self):
         """
@@ -202,7 +210,7 @@ class DataAquisition:
             timestamp = datetime.now()
 
             # Push workload to worker pool.
-            async_obj = self.__processingWorkerPool.apply_async(
+            self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
                 args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
         # Stop scanning.
@@ -337,8 +345,12 @@ class DataAquisition:
         self.__workerThread.start()
         print("Thread started.")
 
+        # Set output state.
+        self.__gpioFunc(self.__activeMeasConfigIdx)
+
         # Release lock
         self.__changeMeasConfSem.release()
+
 
     def stop(self):
         """
