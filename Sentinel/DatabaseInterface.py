@@ -151,7 +151,10 @@ class DatabaseInterface:
                 return
                 
             # Aquire lock
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                continue
             
             measurement = obj[0]
             value = obj[1]
@@ -160,7 +163,6 @@ class DatabaseInterface:
             if measurement not in self.valueCache.keys():
                 self.valueCache[measurement] = {}
             
-            print("write to valueCache")
             self.valueCache[measurement].update(value)
 
             # Everything has been done. Releae lock.
@@ -214,11 +216,13 @@ class DatabaseInterface:
         """
         Writes value cache to the database.
         """
-        print("Writing back " + str(len(self.valueCache)))
         # Do nothing, if no values are in the cache.
         if(len(self.valueCache)):       
             # Aquire lock, so valueTriple is ensured to not change.
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                return
 
             # Iterate over valueCache to build the SQL statments.
             for tableName, valueDict in self.valueCache.items():

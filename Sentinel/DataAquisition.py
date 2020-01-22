@@ -308,7 +308,10 @@ class DataAquisition:
         """
 
         # Aquire lock.
-        self.__changeMeasConfSem.acquire()
+        try:
+            self.__changeMeasConfSem.acquire()
+        except:
+            return
 
         # Get current scan rate, before changing measurement configuration.
         scanRate = \
@@ -320,7 +323,7 @@ class DataAquisition:
         # generated from the currently active scanRate. If longer than 
         # 2 * scanRate is waited, an exception is raised.
         self.__runThread = False
-        self.__workerThread.join(timeout = 2 * scanRate / 1000.0)
+        self.__workerThread.join()
         
         if self.__workerThread.is_alive():
             # Thread is still alive, when it already should have terminated.
