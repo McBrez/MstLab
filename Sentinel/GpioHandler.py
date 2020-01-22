@@ -126,6 +126,23 @@ class GpioHandler:
             self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
             outputState)
 
+    def applyMeasConfig(self, measIndx):
+        """
+        Applies the Output state to GPIO, that is specified by the user in the 
+        configuration file.
+
+        measIndx (int): The index of the measurement configuration, that shall
+        be applied.
+        """
+
+        # Get new output state.
+        outputState = self.__outputStates[measIndx]
+
+        # Set new output state.
+        GPIO.output(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
+            outputState)
+        
     def __cbGpioChanged(self, channel):
         """
         Is registered to RPi.GPIO module, and is called when the state of the
@@ -154,8 +171,8 @@ class GpioHandler:
                 self.__measConfBitField & (value << position)
 
         # Handle output to comply to the new measurement configuration.
-        self.__handleOutput()
+        #self.__handleOutput()
 
         # Send message to DataAcquisition object, to switch to new measurement
         # configuration.
-        self.__onGpioChange(copy.deepcopy(self.__measConfBitField))
+        #self.__onGpioChange(copy.deepcopy(self.__measConfBitField))
