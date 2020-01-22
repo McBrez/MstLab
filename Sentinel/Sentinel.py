@@ -70,17 +70,17 @@ class Sentinel:
             print("Could not start database interface. Aborting.")
             return
 
+        # Start GPIO handler.
+        self.gpioHandler = GpioHandler(
+            self.configObject)
+        self.gpioHandler.start()
+
         # Start data aquisition thread.
         self.dataAquisition = DataAquisition(
             self.configObject,
-             self.commQueue)
+             self.commQueue,
+             self.gpioHandler.applyMeasConfig)
         self.dataAquisition.start()
-
-        # Start GPIO handler.
-        self.gpioHandler = GpioHandler(
-            self.configObject,
-            self.dataAquisition.changeMeasConfig)
-        self.gpioHandler.start()
 
         # Waiting for STRG + C.
         print("Sentinel started. Press STRG + C to stop.")

@@ -63,7 +63,7 @@ class DatabaseInterface:
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
         # Set up worker thread.
-        self.__workerThread = Process(
+        self.__workerThread = threading.Thread(
             group = None,
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
@@ -160,11 +160,11 @@ class DatabaseInterface:
             if measurement not in self.valueCache.keys():
                 self.valueCache[measurement] = {}
             
+            print("write to valueCache")
             self.valueCache[measurement].update(value)
 
             # Everything has been done. Releae lock.
             self.__writeSemaphore.release()
-
         return
 
     def __workerWriteback(self):
@@ -214,6 +214,7 @@ class DatabaseInterface:
         """
         Writes value cache to the database.
         """
+        print("Writing back " + str(len(self.valueCache)))
         # Do nothing, if no values are in the cache.
         if(len(self.valueCache)):       
             # Aquire lock, so valueTriple is ensured to not change.

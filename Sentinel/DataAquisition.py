@@ -46,7 +46,7 @@ class DataAquisition:
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, dbIfQueue):
+    def __init__(self, configObject, dbIfQueue, applyMeasConfig):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
@@ -123,6 +123,10 @@ class DataAquisition:
         # The queue to the dbInterface.
         self.__dbIfQueue = dbIfQueue
 
+        # Function that shall be called, when the measurment configuration 
+        # changes.
+        self.__applyMeasConfig = applyMeasConfig
+
     def start(self):
         """
         Starts to worker thread
@@ -196,9 +200,17 @@ class DataAquisition:
             timestamp = datetime.now()
 
             # Push workload to worker pool.
+            argObj = (
+                timestamp,
+                acquiredData.data,
+                self.__dbIfQueue,
+                self.__currCalculations,
+                self.__currMeasurementConfigName,
+                self.__currChannelDict,
+                self.__currScanRate)
             self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
-                args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
+                args = argObj)
        
         # Stop scanning.
         hat.a_in_scan_stop()
@@ -325,6 +337,9 @@ class DataAquisition:
         # Set new measurement configuration index.
         self.__activeMeasConfigIdx = measConfIdx
         print("Changed measurement configuration to " + str(measConfIdx))
+
+        # Set output state.
+        self.__applyMeasConfig(self.__activeMeasConfigIdx)
 
         # Restart thread.
         self.__runThread = True

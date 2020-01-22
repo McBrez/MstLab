@@ -29,7 +29,7 @@ class GpioHandler:
     # occupied by other functions.
     GPIO_PROHIBITED_PINS = [8,9,10,11,12,13,26]
 
-    def __init__(self, configObject, onGpioChange):
+    def __init__(self, configObject):
         """
         Loads the configObject.
         
@@ -37,12 +37,7 @@ class GpioHandler:
 
         configObject (SentinelConfig): The object, the configuration shall be loaded
         from.
-
-        onGpioChange (function): A function, that will be called, when the state of
-        the GPIOs change.
         """
-
-        self.__onGpioChange = onGpioChange
         
         # Set RPi.GPIO module to use board numbering. 
         GPIO.setmode(GPIO.BOARD)
