@@ -14,7 +14,8 @@ License:
 import sqlite3
 from string import Template
 import time
-from multiprocessing import Process, Semaphore 
+from multiprocessing import Process, Semaphore
+import threading
 
 # Project imports
 from SentinelConfig import SentinelConfig
