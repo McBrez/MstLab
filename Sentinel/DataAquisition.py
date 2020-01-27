@@ -46,7 +46,7 @@ class DataAquisition:
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, dbIfQueue):
+    def __init__(self, configObject, dbIfQueue, gpioFunc):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
@@ -56,9 +56,11 @@ class DataAquisition:
             configObject (DataAquisitionConfig): Contains the configuration for 
             creation of this object.
 
-            storeFunc ((void)(storeObj)): A refernce to function, that is called
-            to store the aquired data. The store function should return nothing,
-            and take a storeObj. 
+            dbIfQueue (Manager.Queue): Managed queue object, that is used to 
+            communicate with the database interface.
+
+            gpioFunc ((void)(int)): Function pointer, that is used to trigger
+            GPIOs.
         """
         # Load configuration objects.
         self.__configObject = configObject
@@ -122,6 +124,8 @@ class DataAquisition:
 
         # The queue to the dbInterface.
         self.__dbIfQueue = dbIfQueue
+
+        self.__gpioFunc = gpioFunc
 
     def start(self):
         """
@@ -308,7 +312,7 @@ class DataAquisition:
         # generated from the currently active scanRate. If longer than 
         # 2 * scanRate is waited, an exception is raised.
         self.__runThread = False
-        self.__workerThread.join(timeout = 2 * scanRate / 1000.0)
+        self.__workerThread.join()
         
         if self.__workerThread.is_alive():
             # Thread is still alive, when it already should have terminated.
@@ -325,6 +329,9 @@ class DataAquisition:
         # Set new measurement configuration index.
         self.__activeMeasConfigIdx = measConfIdx
         print("Changed measurement configuration to " + str(measConfIdx))
+
+        # Set GPIOs accordingly.
+        self.__gpioFunc(self.__activeMeasConfigIdx)
 
         # Restart thread.
         self.__runThread = True

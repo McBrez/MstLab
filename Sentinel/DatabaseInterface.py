@@ -1,6 +1,6 @@
 """
-This program has been created as part of the MST lab lecture of  the institute
-of micromechanics TU Wien.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
 This script encapsulates an scqlite database to achieve data persistence. It 
 also exposes an store function, that can be called by the data aquisition 
 module, that allows to dump the measurment values.
@@ -163,6 +163,9 @@ class DatabaseInterface:
 
             # Everything has been done. Releae lock.
             self.__writeSemaphore.release()
+
+            # Tell the queue that the current object has finished processing.
+            self.__dbIfQueue.task_done()
 
         return
 
