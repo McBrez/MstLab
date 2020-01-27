@@ -1,6 +1,6 @@
 """
 This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
-at the "Institut fÃ¼r Sensor und Aktuator Systeme" TU Wien.
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
 This script encapsulates an scqlite database to achieve data persistence. It 
 also exposes an store function, that can be called by the data aquisition 
 module, that allows to dump the measurment values.
@@ -14,7 +14,8 @@ License:
 import sqlite3
 from string import Template
 import time
-from multiprocessing import Process, Semaphore 
+from multiprocessing import Process, Semaphore
+import threading
 
 # Project imports
 from SentinelConfig import SentinelConfig
@@ -62,7 +63,7 @@ class DatabaseInterface:
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
         # Set up worker thread.
-        self.__workerThread = Process(
+        self.__workerThread = threading.Thread(
             group = None,
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
@@ -150,7 +151,10 @@ class DatabaseInterface:
                 return
                 
             # Aquire lock
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                continue
             
             measurement = obj[0]
             value = obj[1]
@@ -163,7 +167,6 @@ class DatabaseInterface:
 
             # Everything has been done. Releae lock.
             self.__writeSemaphore.release()
-
             # Tell the queue that the current object has finished processing.
             self.__dbIfQueue.task_done()
 
@@ -219,7 +222,10 @@ class DatabaseInterface:
         # Do nothing, if no values are in the cache.
         if(len(self.valueCache)):       
             # Aquire lock, so valueTriple is ensured to not change.
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                return
 
             # Iterate over valueCache to build the SQL statments.
             for tableName, valueDict in self.valueCache.items():

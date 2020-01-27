@@ -90,6 +90,7 @@ class Sentinel:
             print("Sentinel stop issued.")
 
         # Stop all modules.
+        self.commQueue.close()
         self.databaseInterface.stop()
         self.dataAquisition.stop()
         self.commQueue.join()

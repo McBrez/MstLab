@@ -1,6 +1,6 @@
 """
 This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
-at the "Institut fÃ¼r Sensor und Aktuator Systeme" TU Wien.
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
 This class exposes functions for GPIO handling. The GPIOs are used to switch an
 external bi-stable relais via an H-bridge circuit. This H-bridge consists of the
 4 transistors A,B,C,D, the bi-stable relais Q and flyback diodes parallely 
