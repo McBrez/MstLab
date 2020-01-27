@@ -1,6 +1,6 @@
 """
 This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
-at the "Institut für Sensor und Aktuator Systeme" TU Wien.
+at the "Institut fï¿½r Sensor und Aktuator Systeme" TU Wien.
 This class exposes functions for GPIO handling. The GPIOs are used to switch an
 external bi-stable relais via an H-bridge circuit. This H-bridge consists of the
 4 transistors A,B,C,D, the bi-stable relais Q and flyback diodes parallely 
@@ -45,7 +45,7 @@ import copy
 
 # Third party imports
 import RPi.GPIO as GPIO
-
+import time
 # Project imports
 from SentinelConfig import SentinelConfig
 from threading import Timer, Semaphore
@@ -61,14 +61,15 @@ class GpioHandler:
     GPIO_PROHIBITED_PINS = [8,9,10,11,12,13,26]
     
     # Time of the voltage pulse, that is applied to the bi-stable relais.
-    DRIVE_TIME = 1
+    DRIVE_TIME = 3
 
     # Time the fly back is active.
-    FLYBACK_TIME = 1
+    FLYBACK_TIME = 0.5
 
     IDX_TRANS_A = 0
-    IDX_TRANS_BC = 1
-    IDX_TRANS_D = 2
+    IDX_TRANS_B = 1
+    IDX_TRANS_C = 2
+    IDX_TRANS_D = 3
 
     # States of output state machine. 
     OUTPUT_STATE_IDLE = 0
@@ -93,15 +94,15 @@ class GpioHandler:
             SentinelConfig.JSON_MEAS_CONTROL)
 
         # Check if configured GPIO pins are valid.
-        gpioSet = set(GpioHandler.GPIO_PROHIBITED_PINS)
+        #gpioSet = set(GpioHandler.GPIO_PROHIBITED_PINS)
 
-        gpioOut = set(
-		    [self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]])
-        if gpioSet.intersection(gpioOut):
-            raise ValueError(
-                "Configuration error. " +
-                SentinelConfig.JSON_MEAS_CONTROL_OUTPUT + 
-                " defines prohibited GPIO pins.")
+        # gpioOut = set(
+		#     [self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]])
+        # if gpioSet.intersection(gpioOut):
+        #     raise ValueError(
+        #         "Configuration error. " +
+        #         SentinelConfig.JSON_MEAS_CONTROL_OUTPUT + 
+        #         " defines prohibited GPIO pins.")
 
         # Stores the currently active measurement config index.
         self.__activemeasConfIdx = 0
@@ -132,12 +133,18 @@ class GpioHandler:
         """
         Sets up in- and outputs and start listeners for inputs.
         """
+        # Setup in/outputs.
+        for chan in self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]:
+            GPIO.setup(
+                chan,
+                GPIO.OUT,
+                initial = GPIO.LOW)
 
-        # Setup in/outputs. 
-        GPIO.setup(
-            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
-            GPIO.OUT,
-            initial = GPIO.LOW)
+        # var = False
+        # for i in range(6):
+        #     GPIO.output(29,var)
+        #     var = not var
+        #     time.sleep(1)
 
     def stop(self):
         """
@@ -161,17 +168,23 @@ class GpioHandler:
         if self.__outputStateMachine == GpioHandler.OUTPUT_STATE_IDLE:
             # Determine which transistors to switch.
             if self.__outputStates[self.__activemeasConfIdx]:
-                # Current flow from transitor A to D.
-                GPIO.output(
-                    self.__measContConfig\
-                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                        [GpioHandler.IDX_TRANS_BC],
-                    False)
-                GPIO.output(
-                    self.__measContConfig\
-                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                        [GpioHandler.IDX_TRANS_A],
-                    True)
+                #Current flow from transitor A to D.
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_B],
+                #     False)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_C],
+                #     False)
+                # print("Activating A")
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_A],
+                #     True)
                 GPIO.output(
                     self.__measContConfig\
                         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
@@ -179,48 +192,90 @@ class GpioHandler:
                     True)
             else:
                 # Current flow from transitor B to C.
-                GPIO.output(
-                    self.__measContConfig\
-                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                        [GpioHandler.IDX_TRANS_A],
-                    False)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_A],
+                #     False)
                 GPIO.output(
                     self.__measContConfig\
                         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
                         [GpioHandler.IDX_TRANS_D],
                     False)
-                GPIO.output(
-                    self.__measContConfig\
-                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                        [GpioHandler.IDX_TRANS_BC],
-                    True)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_B],
+                #     True)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_C],
+                #     True)
 
             # Set new state and start timer.
             self.__outputStateMachine = GpioHandler.OUTPUT_STATE_DRIVE
+            self.__outputDriveTimer = Timer(
+                interval = GpioHandler.DRIVE_TIME,
+                function = self.__handleOutput)
             self.__outputDriveTimer.start()
 
         # OUTPUT_STATE_DRIVE
         elif self.__outputStateMachine == GpioHandler.OUTPUT_STATE_DRIVE:
-            # Let current flow over transistor A and the flyback diode 
-            # parallely to B.
-            GPIO.output(
-                self.__measContConfig\
-                    [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                    [GpioHandler.IDX_TRANS_BC],
-                False)
-            GPIO.output(
-                self.__measContConfig\
-                    [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                    [GpioHandler.IDX_TRANS_A],
-                True)
-            GPIO.output(
-                self.__measContConfig\
-                    [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                    [GpioHandler.IDX_TRANS_D],
-                False)
+            if self.__outputStates[self.__activemeasConfIdx]:
+                #Let current flow over transistor A and the flyback diode 
+                #parallely to B.
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_B],
+                #     False)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_C],
+                #     False)
+                # print("Activating A")
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_A],
+                #     True)
+                GPIO.output(
+                    self.__measContConfig\
+                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                        [GpioHandler.IDX_TRANS_D],
+                    False)
+            else:
+                #Let current flow over transistor A and the flyback diode 
+                #parallely to B.
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_B],
+                #     False)
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_C],
+                #     True)
+                # print("Deactivating A")
+                # GPIO.output(
+                #     self.__measContConfig\
+                #         [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                #         [GpioHandler.IDX_TRANS_A],
+                #     False)
+                GPIO.output(
+                    self.__measContConfig\
+                        [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                        [GpioHandler.IDX_TRANS_D],
+                    False)
 
             # Set new state and start timer.
             self.__outputStateMachine = GpioHandler.OUTPUT_STATE_FLYBACK
+            self.__outputFlybackTimer = Timer(
+                interval = GpioHandler.FLYBACK_TIME,
+                function = self.__handleOutput)
             self.__outputFlybackTimer.start()
 
         # OUTPUT_STATE_FLYBACK
@@ -229,7 +284,12 @@ class GpioHandler:
             GPIO.output(
                 self.__measContConfig\
                     [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
-                    [GpioHandler.IDX_TRANS_BC],
+                    [GpioHandler.IDX_TRANS_B],
+                False)
+            GPIO.output(
+                self.__measContConfig\
+                    [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]\
+                    [GpioHandler.IDX_TRANS_C],
                 False)
             GPIO.output(
                 self.__measContConfig\
@@ -265,7 +325,7 @@ class GpioHandler:
         # Store new measurement index.
         self.__activemeasConfIdx = measIndx
 
-        # Acquire lock to ensure state machine can only be entered once.
+        # # Acquire lock to ensure state machine can only be entered once.
         self.__outputStateSem.acquire()
 
         # Trigger output state machine.

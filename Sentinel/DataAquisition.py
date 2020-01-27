@@ -405,3 +405,10 @@ class DataAquisition:
 
             # Trigger change of measurment configuration
             self.changeMeasConfig(newMeasConfIdx)
+
+            # Create new Timer.
+            self.__confChangeTimer = threading.Timer(
+                interval = self.__measConfSwitchTimerIntervall,
+                function = self.__confChangeFunc)
+            
+            self.__confChangeTimer.start()

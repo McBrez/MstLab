@@ -10,6 +10,7 @@ from SentinelConfig import SentinelConfig
 from DatabaseInterface import DatabaseInterface
 from DataAquisition import DataAquisition
 from GpioHandler import GpioHandler
+import RPi.GPIO as GPIO
 
 # Python imports
 from multiprocessing import Manager, queues
@@ -90,7 +91,7 @@ class Sentinel:
             print("Sentinel stop issued.")
 
         # Stop all modules.
-        self.commQueue.close()
+        GPIO.cleanup()
         self.databaseInterface.stop()
         self.dataAquisition.stop()
         self.commQueue.join()

@@ -73,7 +73,7 @@ class SentinelConfig:
 
     # A integer that specifies a GPIO pin, that assumes a state corresponding to
     # the currently active measurement configuration.
-    JSON_MEAS_CONTROL_OUTPUT = "MeasConfigOutputGpio"
+    JSON_MEAS_CONTROL_OUTPUT = "MeasConfigOutputsGpio"
 
     # An integer, that specifies the intervall, in which the measurment 
     # configuration is changed. Intepreted as in seconds.

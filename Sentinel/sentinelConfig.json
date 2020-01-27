@@ -30,7 +30,7 @@
         }
     ],
     "MeasurementControl" : {
-        "MeasConfSwitchTimer" : 10,
-        "MeasConfigOutputsGpio" : [8,9,10]
+        "MeasConfSwitchTimer" : 5,
+        "MeasConfigOutputsGpio" : [29,31,32,33]
     }
 }
