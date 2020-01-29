@@ -42,7 +42,7 @@ class DataAquisition:
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, dbIfQueue, gpioFunc):
+    def __init__(self, configObject, dbIfQueue, gpioQueue):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
@@ -55,8 +55,8 @@ class DataAquisition:
             dbIfQueue (Manager.Queue): Managed queue object, that is used to 
             communicate with the database interface.
 
-            gpioFunc ((void)(int)): Function pointer, that is used to trigger
-            GPIOs.
+            gpioQueue (Manager.Queue):  Managed queue object, that is used to 
+            communicate with the GPIO module.
         """
         # Load configuration objects.
         self.__configObject = configObject
@@ -121,7 +121,8 @@ class DataAquisition:
         # The queue to the dbInterface.
         self.__dbIfQueue = dbIfQueue
 
-        self.__gpioFunc = gpioFunc
+        # The queue to the gpio module.
+        self.__gpioQueue = gpioQueue
 
     def start(self):
         """
@@ -355,7 +356,7 @@ class DataAquisition:
         print("Changed measurement configuration to " + str(measConfIdx))
 
         # Set GPIOs accordingly.
-        self.__gpioFunc(self.__activeMeasConfigIdx)
+        self.__gpioQueue.put_nowait(self.__activeMeasConfigIdx)
 
         # Restart thread.
         self.__runThread = True

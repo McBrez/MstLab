@@ -40,7 +40,8 @@ class Sentinel:
 
         # Declare additional objects.
         self.manager = None
-        self.commQueue = None
+        self.dbIfQueue = None
+        self.gpioQueue = None
         return
 
     def main(self):
@@ -54,7 +55,11 @@ class Sentinel:
 
         # Init queue for communication between DataAcquisition and 
         # DatabaseInterface module.
-        self.commQueue = self.manager.Queue()
+        self.dbIfQueue = self.manager.Queue()
+
+        # Init queue for communication between DataAcquisition and 
+        # GpioHandler module.
+        self.gpioQueue = self.manager.Queue()
 
         # Parse XML configuration file into a DataAquisitionConfig object.
         self.configObject = SentinelConfig(self.configFile)
@@ -65,7 +70,7 @@ class Sentinel:
         # Start database interface
         self.databaseInterface = DatabaseInterface(
             self.configObject,
-            self.commQueue)
+            self.dbIfQueue)
 
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
@@ -73,14 +78,19 @@ class Sentinel:
 
         # Start GPIO handler.
         self.gpioHandler = GpioHandler(
-            self.configObject)
-        self.gpioHandler.start()
+            self.configObject,
+            self.gpioQueue)
+        if(not self.gpioHandler.start()):
+            print(
+                "Could not start GpioHandler. Probably configuration specified "
+                "in the configuration file is invalid. Aborting.")
+                return
 
         # Start data aquisition thread.
         self.dataAquisition = DataAquisition(
             self.configObject,
              self.commQueue,
-             self.gpioHandler.applyMeasConfig)
+             self.gpioQueue)
         self.dataAquisition.start()
 
         # Waiting for STRG + C.
@@ -91,10 +101,9 @@ class Sentinel:
             print("Sentinel stop issued.")
 
         # Stop all modules.
-        GPIO.cleanup()
-        self.databaseInterface.stop()
         self.dataAquisition.stop()
-        self.commQueue.join()
+        self.databaseInterface.stop()
+        self.manager.shutdown()
         self.gpioHandler.stop()
         print("Sentinel has stopped.")
 
