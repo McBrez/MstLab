@@ -1,15 +1,18 @@
 """
-	MCC 118 Functions Demonstrated:
-		mcc118.a_in_scan_start
-		mcc118.a_in_scan_read
-		mcc118.a_in_scan_stop
-	Purpose:
-		Performs a finite acquisition on 1 or more channels.
-	Description:
-		Continuously acquires blocks of analog input data for a
-		user-specified group of channels until the acquisition is
-		stopped by the user.  The last sample of data for each channel
-		is displayed for each block of data received from the device.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
+This class handles the data acquistion via the MCC118 DAQ card. The DAQ card is
+run in continuous measurement mode. A Thread, that is spawned by this class on
+start(), clears the buffer of the DAQ card, and pushes the acquired values to
+a multiprocessing.Pool for further processing. The processed value are then 
+pushed to the database interface for storage. Also, the measurement 
+configuration is handled in this module. After a specified time span has elapsed
+the measurement configuration switches. A corresponding message is sent to the
+GPIO handler module, that sets up the ouput accordingly.
+
+Author: David FREISMUTH
+Date: DEC 2019
+License: 
 """
 
 # Python imports
@@ -30,18 +33,11 @@ from SentinelConfig import SentinelConfig
 
 class DataAquisition:
     """
-    Encapsulates the data aquisition functions. Inherits from threading.Thread, 
-    so the aquisition can run parallely in a separate thread.
-
-    Instance Attributes:
-        scanConfig(DataAquisitionConfig): Stores the configuration of the data 
-        aquisition.
+    Encapsulates the data aquisition functions.
     """
 
     # Contant that specifies, that all available data shall be read.
     READ_ALL_AVAILABLE = -1
-    CURSOR_BACK_2 = '\x1b[2D'
-    ERASE_TO_END_OF_LINE = '\x1b[0K'
     
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
@@ -53,7 +49,7 @@ class DataAquisition:
         to pass the measured valus to database interface.
 
         Parameters:
-            configObject (DataAquisitionConfig): Contains the configuration for 
+            configObject (SentinelConfig): Contains the configuration for 
             creation of this object.
 
             dbIfQueue (Manager.Queue): Managed queue object, that is used to 
@@ -129,12 +125,16 @@ class DataAquisition:
 
     def start(self):
         """
-        Starts to worker thread
+        Starts the worker thread
         """
 
         self.__runThread = True
         self.__workerThread.start()
-        self.__confChangeTimer.start()
+
+        # Only start config change time, if there are more than one 
+        # configurations.
+        if(len(self.__measurementConfig) > 1):
+            self.__confChangeTimer.start()
 
     def __scanningFunction(self):
         """
@@ -199,10 +199,19 @@ class DataAquisition:
             # Get current timestamp.
             timestamp = datetime.now()
 
+            args = (
+                timestamp,
+                acquiredData.data,
+                self.__dbIfQueue,
+                self.__currCalculations,
+                self.__currMeasurementConfigName,
+                self.__currChannelDict,
+                self.__currScanRate) 
+
             # Push workload to worker pool.
             self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
-                args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
+                args = args)
        
         # Stop scanning.
         hat.a_in_scan_stop()
@@ -226,8 +235,23 @@ class DataAquisition:
         1/__currScanRate seconds for each acquired value.
 
         Parameters:
-        timestamp (datetime): The timestamp the call to this function is 
-        associated with.
+        
+        timestamp(datetime): Timestamp corresponding to the most recent 
+        measurement in data.
+        
+        data(float[]): List of floats containing measurement data.
+
+        queue(Manager.Queue): Managed queue, used for communication with 
+        database interface module.
+
+        currCalculations(dict<string,string>): Contains currently active 
+        calculations
+        
+        currMeasurementConfigName(string): Currently active measurement name.
+
+        currChannelDict(dict<string,string>): Currently active channel mapping.
+
+        currScanRate(int): Currently active scan rate.
         """
 
         try:
@@ -350,9 +374,9 @@ class DataAquisition:
         Stops the worker loop after completing one last worker loop iteration.
         """
 
+        self.__confChangeTimer.cancel()
         self.__runThread = False
         self.__workerThread.join()
-        self.__confChangeTimer.cancel()
         self.__processingWorkerPool.close()
         self.__processingWorkerPool.join()
         print("Stopped acquisition module")

@@ -1,9 +1,9 @@
 """
 This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
-at the "Institut f�r Sensor und Aktuator Systeme" TU Wien.
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
 This script encapsulates an scqlite database to achieve data persistence. It 
 also exposes an store function, that can be called by the data aquisition 
-module, that allows to dump the measurment values.
+module, that allows to dump the measurement values.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -14,7 +14,6 @@ License:
 import sqlite3
 from string import Template
 import time
-from multiprocessing import Process, Semaphore
 import threading
 
 # Project imports
@@ -78,7 +77,7 @@ class DatabaseInterface:
         # A semaphore is needed, to avoid race conditions when this object is
         # trying to write back to databse, and another module is adding values
         # to the value cache.
-        self.__writeSemaphore = Semaphore(value = 1)
+        self.__writeSemaphore = threading.Semaphore(value = 1)
 
         # Boolean that signals wether this object is connected to a database.
         self.__connected = False
@@ -167,6 +166,7 @@ class DatabaseInterface:
 
             # Everything has been done. Releae lock.
             self.__writeSemaphore.release()
+
             # Tell the queue that the current object has finished processing.
             self.__dbIfQueue.task_done()
 
@@ -251,4 +251,8 @@ class DatabaseInterface:
 
             # Commit changes to DB and release semaphore.
             self.dbConnection.commit()
-            self.__writeSemaphore.release()
+
+            try:
+                self.__writeSemaphore.release()
+            except:
+                return

@@ -1,5 +1,8 @@
 """
-This program has been created as a part of the MST lab lecture.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
+This is the main class of the project, which instatiates all necessary sub 
+modules and handles communication between them.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -22,13 +25,10 @@ class Sentinel:
 
     def __init__(self, configFile):
         """
-        Stores the paths of the XML config file and the name of the SQLite
-        database file. Does not start the object.
+        Initializes the object. The object has then to be started with main().
 
         Paramterers:
         configFile (string): Path to the XML config file.
-        databaseFile (string): Name of the SQlite databse file that shall be
-        created.
         """
 
         # Declare project object.
