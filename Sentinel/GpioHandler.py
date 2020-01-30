@@ -57,7 +57,7 @@ class GpioHandler:
     """
     
     # Time of the voltage pulse, that is applied to the bi-stable relais.
-    DRIVE_TIME = 3
+    DRIVE_TIME = 1
 
     # Time the fly back is active.
     FLYBACK_TIME = 0.5
@@ -153,7 +153,19 @@ class GpioHandler:
         
         # Setup in/outputs.
         GPIO.setup(
-            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT][0],
+            GPIO.OUT,
+            initial = GPIO.HIGH)
+        GPIO.setup(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT][1],
+            GPIO.OUT,
+            initial = GPIO.HIGH)
+        GPIO.setup(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT][2],
+            GPIO.OUT,
+            initial = GPIO.LOW)
+        GPIO.setup(
+            self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT][3],
             GPIO.OUT,
             initial = GPIO.LOW)
 
@@ -171,7 +183,7 @@ class GpioHandler:
                     # Determine which transistors to switch.
                     if self.__outputStates[self.__activemeasConfIdx]:
                         #Current flow from transitor A to D.
-                        outputState = (False, True , False, True)
+                        outputState = (False, True, False, True)
                         GPIO.output(
                             self.__measContConfig\
                                 [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
@@ -202,7 +214,7 @@ class GpioHandler:
                     else:
                         #Let current flow over transistor C and the flyback diode 
                         #parallely to D.
-                        outputState = (False, False, True, False)
+                        outputState = (True, True, True, False)
                         GPIO.output(
                             self.__measContConfig\
                                 [SentinelConfig.JSON_MEAS_CONTROL_OUTPUT],
@@ -224,6 +236,7 @@ class GpioHandler:
                     # Set new state and start timer.
                     self.__outputStateMachine = GpioHandler.OUTPUT_STATE_IDLE
                     runStateMachine = False
+                    self.__gpioQueue.task_done()
 
                 # INVALID STATE
                 else:

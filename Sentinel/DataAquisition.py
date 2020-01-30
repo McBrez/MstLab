@@ -132,6 +132,9 @@ class DataAquisition:
         self.__runThread = True
         self.__workerThread.start()
 
+        # Initialize output state. 
+        self.__gpioQueue.put_nowait(self.__activeMeasConfigIdx)
+        
         # Only start config change time, if there are more than one 
         # configurations.
         if(len(self.__measurementConfig) > 1):
@@ -327,15 +330,7 @@ class DataAquisition:
         # Aquire lock.
         self.__changeMeasConfSem.acquire()
 
-        # Get current scan rate, before changing measurement configuration.
-        scanRate = \
-            self.__measurementConfig\
-                [self.__activeMeasConfigIdx]\
-                [SentinelConfig.JSON_MEASUREMENT_SCANRATE]
-
-        # Stop Acquisition loop and wait until it finishes. The timeout is 
-        # generated from the currently active scanRate. If longer than 
-        # 2 * scanRate is waited, an exception is raised.
+        # Stop Acquisition loop and wait until it finishes.
         self.__runThread = False
         self.__workerThread.join()
         
