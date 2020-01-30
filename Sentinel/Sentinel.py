@@ -84,13 +84,13 @@ class Sentinel:
             print(
                 "Could not start GpioHandler. Probably configuration specified "
                 "in the configuration file is invalid. Aborting.")
-                return
+            return
 
         # Start data aquisition thread.
         self.dataAquisition = DataAquisition(
             self.configObject,
-             self.commQueue,
-             self.gpioQueue)
+            self.dbIfQueue,
+            self.gpioQueue)
         self.dataAquisition.start()
 
         # Waiting for STRG + C.

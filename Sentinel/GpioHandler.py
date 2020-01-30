@@ -127,7 +127,7 @@ class GpioHandler:
         Starts the listener thread.
         """
         
-        if len(__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]) != 4:
+        if len(self.__measContConfig[SentinelConfig.JSON_MEAS_CONTROL_OUTPUT]) != 4:
             return False
         else:
             self.__runThread = True

@@ -56,8 +56,6 @@ class DatabaseInterface:
         # Extract configuration data from databaseConfig.
         self.databaseName = \
             str(self.databaseConfig[SentinelConfig.JSON_DATABASE_NAME])
-        self.bufferSize = \
-            int(self.databaseConfig[SentinelConfig.JSON_ACQUISITION_BUFFER])
         self.storageIntervall = \
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
