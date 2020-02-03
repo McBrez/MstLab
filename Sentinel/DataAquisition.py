@@ -68,10 +68,6 @@ class DataAquisition:
             self.__configObject.getConfig(
                 SentinelConfig.JSON_MEAS_CONTROL)
 
-        # Deactivate signal handler, so spawned processes dont inherit it. 
-        # This is necessary, to be able to shutdown gracefully on a SIGINT.
-        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-
         # Register worker function as Thread.
         self.__workerThread = threading.Thread(
             group = None,
@@ -128,9 +124,6 @@ class DataAquisition:
 
         # The queue to the gpio module.
         self.__gpioQueue = gpioQueue
-
-        # Reactivate signal handler for SIGINT
-        signal.signal(signal.SIGINT, original_sigint_handler)
 
     def start(self):
         """
@@ -346,21 +339,6 @@ class DataAquisition:
             # Raise an exception.
             raise Exception("DataAquisition working loop could not terminate")
 
-        # Wait on worker pool to finish.
-        self.__processingWorkerPool.close()
-        self.__processingWorkerPool.join()
-        
-        # Deactivate signal handler, so spawned processes dont inherit it. 
-        # This is necessary, to be able to shutdown gracefully on a SIGINT.
-        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-        # Redefine worker pool
-        self.__processingWorkerPool = Pool()
-
-                # Reactivate signal handler for SIGINT
-        signal.signal(signal.SIGINT, original_sigint_handler)
-
-
         # Set new measurement configuration index.
         self.__activeMeasConfigIdx = measConfIdx
         print("Changed measurement configuration to " + str(measConfIdx))
@@ -389,7 +367,6 @@ class DataAquisition:
         self.__runThread = False
         self.__workerThread.join()
         self.__processingWorkerPool.close()
-        self.__processingWorkerPool.join()
         print("Stopped acquisition module")
 
         return

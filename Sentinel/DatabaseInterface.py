@@ -233,10 +233,10 @@ class DatabaseInterface:
                 for timestamp, value in valueDict.items():
                     # Do not add comma on first iteration of loop
                     if(firstIteration):
-                        valueListStr += "('" + timestamp + "', " + str(value) + ")"
+                        valueListStr += "('" + str(timestamp) + "', " + str(value) + ")"
                         firstIteration = False
                     else:
-                         valueListStr += ",('" + timestamp + "', " + str(value) + ")"
+                         valueListStr += ",('" + str(timestamp) + "', " + str(value) + ")"
 
                 insertQuery = \
                     DatabaseInterface.VALUE_INSERT_QUERY.substitute(
