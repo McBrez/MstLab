@@ -1,15 +1,18 @@
 """
-	MCC 118 Functions Demonstrated:
-		mcc118.a_in_scan_start
-		mcc118.a_in_scan_read
-		mcc118.a_in_scan_stop
-	Purpose:
-		Performs a finite acquisition on 1 or more channels.
-	Description:
-		Continuously acquires blocks of analog input data for a
-		user-specified group of channels until the acquisition is
-		stopped by the user.  The last sample of data for each channel
-		is displayed for each block of data received from the device.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
+This class handles the data acquistion via the MCC118 DAQ card. The DAQ card is
+run in continuous measurement mode. A Thread, that is spawned by this class on
+start(), clears the buffer of the DAQ card, and pushes the acquired values to
+a multiprocessing.Pool for further processing. The processed value are then 
+pushed to the database interface for storage. Also, the measurement 
+configuration is handled in this module. After a specified time span has elapsed
+the measurement configuration switches. A corresponding message is sent to the
+GPIO handler module, that sets up the ouput accordingly.
+
+Author: David FREISMUTH
+Date: DEC 2019
+License: 
 """
 
 # Python imports
@@ -31,36 +34,39 @@ from SentinelConfig import SentinelConfig
 
 class DataAquisition:
     """
-    Encapsulates the data aquisition functions. Inherits from threading.Thread, 
-    so the aquisition can run parallely in a separate thread.
-
-    Instance Attributes:
-        scanConfig(DataAquisitionConfig): Stores the configuration of the data 
-        aquisition.
+    Encapsulates the data aquisition functions.
     """
 
     # Contant that specifies, that all available data shall be read.
     READ_ALL_AVAILABLE = -1
-    CURSOR_BACK_2 = '\x1b[2D'
-    ERASE_TO_END_OF_LINE = '\x1b[0K'
     
     # Time the scan buffer is popped. In seconds.
     __SCAN_SLEEP_TIME = 0.8
 
-    def __init__(self, configObject, dbIfQueue):
+    def __init__(self, configObject, dbIfQueue, gpioQueue):
         """
         Constructor, that copies the contents of configObject into the 
         DataAquisition object and registers the storage function that is used
         to pass the measured valus to database interface.
 
         Parameters:
-            configObject (DataAquisitionConfig): Contains the configuration for 
+            configObject (SentinelConfig): Contains the configuration for 
             creation of this object.
 
-            storeFunc ((void)(storeObj)): A refernce to function, that is called
-            to store the aquired data. The store function should return nothing,
-            and take a storeObj. 
+            dbIfQueue (Manager.Queue): Managed queue object, that is used to 
+            communicate with the database interface.
+
+            gpioQueue (Manager.Queue):  Managed queue object, that is used to 
+            communicate with the GPIO module.
         """
+        # Load configuration objects.
+        self.__configObject = configObject
+        self.__measurementConfig = \
+            self.__configObject.getConfig(
+                SentinelConfig.JSON_MEASUREMENT_CONFIG)
+        self.__measurementControl = \
+            self.__configObject.getConfig(
+                SentinelConfig.JSON_MEAS_CONTROL)
 
         # Deactivate signal handler, so spawned processes dont inherit it. 
         # This is necessary, to be able to shutdown gracefully on a SIGINT.
@@ -76,26 +82,18 @@ class DataAquisition:
         # has CPU cores.
         self.__processingWorkerPool = Pool()
 
-        # Register timer threas responsible for periodic changing of measurement
-        # configuration.
-        self.__confChangeThread = threading.Thread(
-            group = None,
-            target = self.__confChangeFunc,
-            name = "ConfigurationChangeThread")
+        # The time a single measurment configuration is active. After that, 
+        # It gets changed to the next measurment configuration.
+        self.__measConfSwitchTimerIntervall = \
+            self.__measurementControl \
+                [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_INT] 
 
-        # Dict of Thread objects, that execute __processingFunction(). The key
-        # is a timestamp of the point in time the thread has been started.
-        self.__processingThreadsDict = {}
-
-        # Load configuration objects.
-        self.__configObject = configObject
-        self.__measurementConfig = \
-            self.__configObject.getConfig(
-                SentinelConfig.JSON_MEASUREMENT_CONFIG)
-        self.__measurementControl = \
-            self.__configObject.getConfig(
-                SentinelConfig.JSON_MEAS_CONTROL)
-        
+        # Register timer that is responsible for periodic changing of 
+        # measurement configuration.
+        self.__confChangeTimer = threading.Timer(
+            interval = self.__measConfSwitchTimerIntervall,
+            function = self.__confChangeFunc)
+      
         # Flag that indicates, that the worker thread loop shall be executed.
         self.__runThread = False 
 
@@ -128,23 +126,27 @@ class DataAquisition:
         # The queue to the dbInterface.
         self.__dbIfQueue = dbIfQueue
 
-        # The time a single measurment configuration is active. After that, 
-        # It gets changed to the next measurment configuration.
-        self.__measConfSwitchTimerIntervall = \
-            self.__measurementControl \
-                [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_INT] 
+        # The queue to the gpio module.
+        self.__gpioQueue = gpioQueue
 
         # Reactivate signal handler for SIGINT
         signal.signal(signal.SIGINT, original_sigint_handler)
 
     def start(self):
         """
-        Starts to worker thread
+        Starts the worker thread
         """
 
         self.__runThread = True
         self.__workerThread.start()
-        self.__confChangeThread.start()
+
+        # Initialize output state. 
+        self.__gpioQueue.put_nowait(self.__activeMeasConfigIdx)
+        
+        # Only start config change time, if there are more than one 
+        # configurations.
+        if(len(self.__measurementConfig) > 1):
+            self.__confChangeTimer.start()
 
     def __scanningFunction(self):
         """
@@ -209,12 +211,23 @@ class DataAquisition:
             # Get current timestamp.
             timestamp = datetime.now()
 
+            args = (
+                timestamp,
+                acquiredData.data,
+                self.__dbIfQueue,
+                self.__currCalculations,
+                self.__currMeasurementConfigName,
+                self.__currChannelDict,
+                self.__currScanRate) 
+
             # Push workload to worker pool.
-            async_obj = self.__processingWorkerPool.apply_async(
+            self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
-                args = (timestamp, acquiredData.data, self.__dbIfQueue, self.__currCalculations, self.__currMeasurementConfigName, self.__currChannelDict, self.__currScanRate))
+                args = args)
+       
         # Stop scanning.
         hat.a_in_scan_stop()
+        hat.a_in_scan_cleanup()
 
     @staticmethod
     def processingFunction(
@@ -234,8 +247,23 @@ class DataAquisition:
         1/__currScanRate seconds for each acquired value.
 
         Parameters:
-        timestamp (datetime): The timestamp the call to this function is 
-        associated with.
+        
+        timestamp(datetime): Timestamp corresponding to the most recent 
+        measurement in data.
+        
+        data(float[]): List of floats containing measurement data.
+
+        queue(Manager.Queue): Managed queue, used for communication with 
+        database interface module.
+
+        currCalculations(dict<string,string>): Contains currently active 
+        calculations
+        
+        currMeasurementConfigName(string): Currently active measurement name.
+
+        currChannelDict(dict<string,string>): Currently active channel mapping.
+
+        currScanRate(int): Currently active scan rate.
         """
 
         try:
@@ -247,6 +275,10 @@ class DataAquisition:
                 measurementName = \
                     currMeasurementConfigName + "_" + name
                 resultDict[measurementName] = {}
+
+            # Calculate offset for reconstruction of timestamps.
+            offset = (1.0 / currScanRate)
+            reproducedTimestamp = timestamp.timestamp()
 
             # Pop from acquired data, until it is empty.
             loopCount = 0
@@ -266,11 +298,8 @@ class DataAquisition:
                 # Calculate timestamp for current channelValues by starting from
                 # the original timestamp, and then subtracting the sample
                 # intervall multiplied by the loop iteration count. Offset from 
-                # the original timestamp in micro seconds.
-                offset = (1.0 / currScanRate) * loopCount * 1000000.0
-                timestampDelta = timedelta(microseconds = offset)
-                reproducedTimestamp = timestamp - timestampDelta
-                timestampIsoStr = reproducedTimestamp.isoformat()
+                # the original timestamp in milliseconds.
+                reproducedTimestamp = reproducedTimestamp - offset
                 
                 # Execute configured measurement calculations with the set of 
                 # values.
@@ -284,7 +313,7 @@ class DataAquisition:
                     # Store calculated values in resultDict.
                     measurementName = \
                         currMeasurementConfigName + "_" + name
-                    resultDict[measurementName][timestampIsoStr] = value
+                    resultDict[measurementName][reproducedTimestamp] = value
 
                 loopCount = loopCount + 1
 
@@ -308,17 +337,9 @@ class DataAquisition:
         # Aquire lock.
         self.__changeMeasConfSem.acquire()
 
-        # Get current scan rate, before changing measurement configuration.
-        scanRate = \
-            self.__measurementConfig\
-                [self.__activeMeasConfigIdx]\
-                [SentinelConfig.JSON_MEASUREMENT_SCANRATE]
-
-        # Stop Acquisition loop and wait until it finishes. The timeout is 
-        # generated from the currently active scanRate. If longer than 
-        # 2 * scanRate is waited, an exception is raised.
+        # Stop Acquisition loop and wait until it finishes.
         self.__runThread = False
-        self.__workerThread.join(timeout = 2 * scanRate / 1000.0)
+        self.__workerThread.join()
         
         if self.__workerThread.is_alive():
             # Thread is still alive, when it already should have terminated.
@@ -344,6 +365,9 @@ class DataAquisition:
         self.__activeMeasConfigIdx = measConfIdx
         print("Changed measurement configuration to " + str(measConfIdx))
 
+        # Set GPIOs accordingly.
+        self.__gpioQueue.put_nowait(self.__activeMeasConfigIdx)
+
         # Restart thread.
         self.__runThread = True
         self.__workerThread = threading.Thread(
@@ -361,11 +385,13 @@ class DataAquisition:
         Stops the worker loop after completing one last worker loop iteration.
         """
 
+        self.__confChangeTimer.cancel()
         self.__runThread = False
         self.__workerThread.join()
-        self.__confChangeThread.join()
         self.__processingWorkerPool.close()
         self.__processingWorkerPool.join()
+        print("Stopped acquisition module")
+
         return
 
     @staticmethod
@@ -405,10 +431,7 @@ class DataAquisition:
         specified amount of time.
         """
         
-        while(self.__runThread):
-            # Sleep for the configured time.
-            sleep(self.__measConfSwitchTimerIntervall)
-
+        if(self.__runThread):
             # Get the count of configured measurment configurations.
             measConfCount = len(self.__measurementConfig)
 
@@ -417,3 +440,10 @@ class DataAquisition:
 
             # Trigger change of measurment configuration
             self.changeMeasConfig(newMeasConfIdx)
+
+            # Create new Timer.
+            self.__confChangeTimer = threading.Timer(
+                interval = self.__measConfSwitchTimerIntervall,
+                function = self.__confChangeFunc)
+            
+            self.__confChangeTimer.start()

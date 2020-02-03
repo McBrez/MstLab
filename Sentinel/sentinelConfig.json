@@ -1,7 +1,6 @@
 {
     "DatabaseConfig" : {
         "DatabaseName" : "sentinelDb.sl3",
-        "AcquisitionBufferSize" : 300,
         "WriteIntervall" : 10000
     },
     "MeasurmentConfig" : [
@@ -30,8 +29,7 @@
         }
     ],
     "MeasurementControl" : {
-        "MeasConfSwitchTimer" : 10,
-        "MeasConfigSelectionGpio" : [3],
-        "MeasConfigOutputGpio" : 7
+        "MeasConfSwitchTimer" : 5,
+        "MeasConfigOutputsGpio" : [29,31,32,33]
     }
 }

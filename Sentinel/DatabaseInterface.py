@@ -1,9 +1,9 @@
 """
-This program has been created as part of the MST lab lecture of  the institute
-of micromechanics TU Wien.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
 This script encapsulates an scqlite database to achieve data persistence. It 
 also exposes an store function, that can be called by the data aquisition 
-module, that allows to dump the measurment values.
+module, that allows to dump the measurement values.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -14,7 +14,7 @@ License:
 import sqlite3
 from string import Template
 import time
-from multiprocessing import Process, Semaphore 
+import threading
 
 # Project imports
 from SentinelConfig import SentinelConfig
@@ -25,7 +25,7 @@ class DatabaseInterface:
     CREATE_QUERY = Template( \
         "CREATE TABLE IF NOT EXISTS $tableName " \
         "(idx INTEGER PRIMARY KEY,"
-        "timestamp TEXT, " \
+        "timestamp REAL, " \
         "value REAL NOT NULL)" )
 
     # Template for query that inserts measurement values.
@@ -56,13 +56,11 @@ class DatabaseInterface:
         # Extract configuration data from databaseConfig.
         self.databaseName = \
             str(self.databaseConfig[SentinelConfig.JSON_DATABASE_NAME])
-        self.bufferSize = \
-            int(self.databaseConfig[SentinelConfig.JSON_ACQUISITION_BUFFER])
         self.storageIntervall = \
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
         
         # Set up worker thread.
-        self.__workerThread = Process(
+        self.__workerThread = threading.Thread(
             group = None,
             target = self.__workerWriteback,
             name = 'databaseInterfaceWorker',
@@ -77,7 +75,7 @@ class DatabaseInterface:
         # A semaphore is needed, to avoid race conditions when this object is
         # trying to write back to databse, and another module is adding values
         # to the value cache.
-        self.__writeSemaphore = Semaphore(value = 1)
+        self.__writeSemaphore = threading.Semaphore(value = 1)
 
         # Boolean that signals wether this object is connected to a database.
         self.__connected = False
@@ -126,6 +124,7 @@ class DatabaseInterface:
 
         self.__runThread = False
         self.__workerThread.join() 
+        self.__listenerThread.join()
 
     def storeFunction(self):
         """
@@ -143,9 +142,16 @@ class DatabaseInterface:
 
         while(self.__runThread):
             # Wait for input.
-            obj = self.__dbIfQueue.get()
+            try:
+                obj = self.__dbIfQueue.get()
+            except:
+                return
+                
             # Aquire lock
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                continue
             
             measurement = obj[0]
             value = obj[1]
@@ -158,6 +164,9 @@ class DatabaseInterface:
 
             # Everything has been done. Releae lock.
             self.__writeSemaphore.release()
+
+            # Tell the queue that the current object has finished processing.
+            self.__dbIfQueue.task_done()
 
         return
 
@@ -211,7 +220,10 @@ class DatabaseInterface:
         # Do nothing, if no values are in the cache.
         if(len(self.valueCache)):       
             # Aquire lock, so valueTriple is ensured to not change.
-            self.__writeSemaphore.acquire()
+            try:
+                self.__writeSemaphore.acquire()
+            except:
+                return
 
             # Iterate over valueCache to build the SQL statments.
             for tableName, valueDict in self.valueCache.items():
@@ -237,4 +249,8 @@ class DatabaseInterface:
 
             # Commit changes to DB and release semaphore.
             self.dbConnection.commit()
-            self.__writeSemaphore.release()
+
+            try:
+                self.__writeSemaphore.release()
+            except:
+                return

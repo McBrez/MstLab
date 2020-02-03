@@ -1,5 +1,8 @@
 """
-This program has been created as a part of the MST lab lecture.
+This program has been created as part of the "Mikrosystemtechnik Labor" lecture 
+at the "Institut für Sensor und Aktuator Systeme" TU Wien.
+This is the main class of the project, which instatiates all necessary sub 
+modules and handles communication between them.
 
 Author: David FREISMUTH
 Date: DEC 2019
@@ -22,13 +25,10 @@ class Sentinel:
 
     def __init__(self, configFile):
         """
-        Stores the paths of the XML config file and the name of the SQLite
-        database file. Does not start the object.
+        Initializes the object. The object has then to be started with main().
 
         Paramterers:
         configFile (string): Path to the XML config file.
-        databaseFile (string): Name of the SQlite databse file that shall be
-        created.
         """
 
         # Declare project object.
@@ -40,7 +40,8 @@ class Sentinel:
 
         # Declare additional objects.
         self.manager = None
-        self.commQueue = None
+        self.dbIfQueue = None
+        self.gpioQueue = None
         return
 
     def main(self):
@@ -58,7 +59,11 @@ class Sentinel:
 
         # Init queue for communication between DataAcquisition and 
         # DatabaseInterface module.
-        self.commQueue = self.manager.Queue()
+        self.dbIfQueue = self.manager.Queue()
+
+        # Init queue for communication between DataAcquisition and 
+        # GpioHandler module.
+        self.gpioQueue = self.manager.Queue()
 
         # Parse XML configuration file into a DataAquisitionConfig object.
         self.configObject = SentinelConfig(self.configFile)
@@ -69,23 +74,28 @@ class Sentinel:
         # Start database interface
         self.databaseInterface = DatabaseInterface(
             self.configObject,
-            self.commQueue)
+            self.dbIfQueue)
 
         if(not self.databaseInterface.start()):
             print("Could not start database interface. Aborting.")
             return
 
-        # Start data aquisition thread.
-        self.dataAquisition = DataAquisition(
-            self.configObject,
-             self.commQueue)
-        self.dataAquisition.start()
-
         # Start GPIO handler.
         self.gpioHandler = GpioHandler(
             self.configObject,
-            self.dataAquisition.changeMeasConfig)
-        self.gpioHandler.start()
+            self.gpioQueue)
+        if(not self.gpioHandler.start()):
+            print(
+                "Could not start GpioHandler. Probably configuration specified "
+                "in the configuration file is invalid. Aborting.")
+            return
+
+        # Start data aquisition thread.
+        self.dataAquisition = DataAquisition(
+            self.configObject,
+            self.dbIfQueue,
+            self.gpioQueue)
+        self.dataAquisition.start()
 
         # Reactivate signal handler for SIGINT
         signal.signal(signal.SIGINT, original_sigint_handler)
@@ -98,8 +108,9 @@ class Sentinel:
             print("Sentinel stop issued.")
 
         # Stop all modules.
-        self.databaseInterface.stop()
         self.dataAquisition.stop()
+        self.databaseInterface.stop()
+        self.manager.shutdown()
         self.gpioHandler.stop()
         print("Sentinel has stopped.")
 
