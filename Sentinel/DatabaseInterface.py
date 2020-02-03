@@ -25,7 +25,7 @@ class DatabaseInterface:
     CREATE_QUERY = Template( \
         "CREATE TABLE IF NOT EXISTS $tableName " \
         "(idx INTEGER PRIMARY KEY,"
-        "timestamp TEXT, " \
+        "timestamp REAL, " \
         "value REAL NOT NULL)" )
 
     # Template for query that inserts measurement values.

@@ -1,7 +1,6 @@
 # importing the required module
 import matplotlib.pyplot as plt 
 import sqlite3
-import dateutil.parser
 import datetime
 
 dbConnection = sqlite3.connect("\\\\128.130.46.28\\daqpi\\MstLab\\Sentinel\\sentinelDb.sl3")
@@ -16,9 +15,10 @@ for table in tables:
     result = dbConnection.cursor().execute("SELECT * FROM " + table + " WHERE idx < 1000000 ORDER BY idx ASC")
     x = [] 
     y = []
-    startTimestamp = dateutil.parser.parse(result[0][1]).timestamp() / 1000
+    startTimestamp = result[0][1]
+    startTimestampstr = datetime.fromtimetamp(startTimestamp).isoformat()
     for row in result:
-        curTimestamp = (dateutil.parser.parse(row[1]).timestamp() / 1000) - startTimestamp
+        curTimestamp = row[1] - startTimestamp
         x.append(curTimestamp)
         y.append(row[2])
     
@@ -31,8 +31,8 @@ for table in tables:
     plt.xlabel('Time (s)') 
     # naming the y axis 
     plt.ylabel('value (V)') 
-    
-    plt.title(table) 
+
+    plt.title(table + " started at " + startTimestampstr) 
 
     # function to show the plot 
     plt.show() 

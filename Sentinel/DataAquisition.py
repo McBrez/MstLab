@@ -268,10 +268,10 @@ class DataAquisition:
                     currMeasurementConfigName + "_" + name
                 resultDict[measurementName] = {}
 
-            # Construct delta time object for reconstruction of time stamps.
-            offset = (1.0 / currScanRate) * 1000000.0
-            timestampDelta = timedelta(microseconds = offset)
-            reproducedTimestamp = timestamp
+            # Calculate offset for reconstruction of timestamps.
+            offset = (1.0 / currScanRate)
+            reproducedTimestamp = timestamp.timestamp()
+
             # Pop from acquired data, until it is empty.
             loopCount = 0
             while len(data) > 0:
@@ -290,9 +290,8 @@ class DataAquisition:
                 # Calculate timestamp for current channelValues by starting from
                 # the original timestamp, and then subtracting the sample
                 # intervall multiplied by the loop iteration count. Offset from 
-                # the original timestamp in micro seconds.
-                reproducedTimestamp = reproducedTimestamp - timestampDelta
-                timestampIsoStr = reproducedTimestamp.isoformat()
+                # the original timestamp in milliseconds.
+                reproducedTimestamp = reproducedTimestamp - offset
                 
                 # Execute configured measurement calculations with the set of 
                 # values.
@@ -306,7 +305,7 @@ class DataAquisition:
                     # Store calculated values in resultDict.
                     measurementName = \
                         currMeasurementConfigName + "_" + name
-                    resultDict[measurementName][timestampIsoStr] = value
+                    resultDict[measurementName][reproducedTimestamp] = value
 
                 loopCount = loopCount + 1
 
