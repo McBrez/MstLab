@@ -19,6 +19,7 @@ import threading
 from multiprocessing import Process, Pool
 from datetime import datetime, timedelta
 import parser
+import signal
 
 # MC118 imports
 from daqhats import mcc118, OptionFlags, HatIDs, HatError
@@ -60,6 +61,10 @@ class DataAquisition:
             to store the aquired data. The store function should return nothing,
             and take a storeObj. 
         """
+
+        # Deactivate signal handler, so spawned processes dont inherit it. 
+        # This is necessary, to be able to shutdown gracefully on a SIGINT.
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # Register worker function as Thread.
         self.__workerThread = threading.Thread(
@@ -128,6 +133,9 @@ class DataAquisition:
         self.__measConfSwitchTimerIntervall = \
             self.__measurementControl \
                 [SentinelConfig.JSON_MEAS_CONTROL_SWITCH_INT] 
+
+        # Reactivate signal handler for SIGINT
+        signal.signal(signal.SIGINT, original_sigint_handler)
 
     def start(self):
         """
@@ -320,9 +328,17 @@ class DataAquisition:
         # Wait on worker pool to finish.
         self.__processingWorkerPool.close()
         self.__processingWorkerPool.join()
+        
+        # Deactivate signal handler, so spawned processes dont inherit it. 
+        # This is necessary, to be able to shutdown gracefully on a SIGINT.
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # Redefine worker pool
         self.__processingWorkerPool = Pool()
+
+                # Reactivate signal handler for SIGINT
+        signal.signal(signal.SIGINT, original_sigint_handler)
+
 
         # Set new measurement configuration index.
         self.__activeMeasConfigIdx = measConfIdx

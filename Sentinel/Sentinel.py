@@ -13,6 +13,7 @@ from GpioHandler import GpioHandler
 
 # Python imports
 from multiprocessing import Manager, queues
+import signal
 
 class Sentinel:
 
@@ -48,6 +49,10 @@ class Sentinel:
         modules.
         """
 
+        # Deactivate signal handler, so spawned processes dont inherit it. 
+        # This is necessary, to be able to shutdown gracefully on a SIGINT.
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
         # Init sync manager for managed queue.
         self.manager = Manager()
 
@@ -81,6 +86,9 @@ class Sentinel:
             self.configObject,
             self.dataAquisition.changeMeasConfig)
         self.gpioHandler.start()
+
+        # Reactivate signal handler for SIGINT
+        signal.signal(signal.SIGINT, original_sigint_handler)
 
         # Waiting for STRG + C.
         print("Sentinel started. Press STRG + C to stop.")
