@@ -147,12 +147,21 @@ class DatabaseInterface:
             except:
                 return
                 
-            # Aquire lock
-            try:
-                self.__writeSemaphore.acquire()
-            except:
+            # Do some checks on obj.
+            if obj == None:
+                # obj does not contain any data. Skip this iteration and wait
+                # for next object.
+                self.__dbIfQueue.task_done()
                 continue
-            
+        
+            if obj == -1:
+                # End symbol received. Terminate this thread.
+                self.__dbIfQueue.task_done()
+                return
+
+            # Aquire lock
+            self.__writeSemaphore.acquire()
+
             measurement = obj[0]
             value = obj[1]
 

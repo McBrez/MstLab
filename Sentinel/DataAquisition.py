@@ -366,7 +366,10 @@ class DataAquisition:
         self.__confChangeTimer.cancel()
         self.__runThread = False
         self.__workerThread.join()
-        self.__processingWorkerPool.close()
+        self.__processingWorkerPool.terminate()
+
+        # Put End symbol to queue
+        self.__dbIfQueue.put_nowait(-1)
         print("Stopped acquisition module")
 
         return
