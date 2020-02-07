@@ -27,6 +27,9 @@ class SentinelConfig:
     # startup.
     JSON_DATABASE_NAME = "DatabaseName"
 
+    # The Intervall in write cycles, until the database file gets changed.
+    JSON_DATABASE_CHANGE_INT = "ChangeIntervall"
+
     # The size of the acquisition buffer.
     JSON_ACQUISITION_BUFFER = "AcquisitionBufferSize"
 

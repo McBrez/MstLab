@@ -141,6 +141,7 @@ class GpioHandler:
         
         self.__runThread = False
         self.__listenerThread.join()
+        GPIO.cleanup()
 
     def __handleOutput(self):
         """
