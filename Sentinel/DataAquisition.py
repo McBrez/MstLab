@@ -182,6 +182,7 @@ class DataAquisition:
             options = OptionFlags.CONTINUOUS)
 
         # Measurement loop.
+        asyncResult = None
         while self.__runThread:
             # MCC118 library automatically creates a buffer for at least a 
             # second worth of samples. To leave some margin for error, the 
@@ -214,7 +215,7 @@ class DataAquisition:
                 self.__currScanRate) 
 
             # Push workload to worker pool.
-            self.__processingWorkerPool.apply_async(
+            asyncResult = self.__processingWorkerPool.apply_async(
                 func = DataAquisition.processingFunction,
                 args = args)
        

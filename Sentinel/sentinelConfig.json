@@ -5,31 +5,32 @@
     },
     "MeasurmentConfig" : [
         {
-            "ConfigName" : "Config1",
+            "ConfigName" : "Resistive",
             "Channels" : {
-                "0" : "UR1"
+				"1" : "U1",
+				"2" : "U2"
             },
-            "ScanRate" : 100000,
+            "ScanRate" : 10000,
             "Measurements" : {
-                "CurrentShunt" : "UR1"
+				"Lever" : "U1",
+                "Coil" : "U2"
+            },
+            "OutputState" : true  
+        },
+	    {
+            "ConfigName" : "Capacitive",
+            "Channels" : {
+                "3" : "U3"
+            },
+            "ScanRate" : 10000,
+            "Measurements" : {
+                "Capacitor" : "U3"
             },
             "OutputState" : false 
-        },
-        {
-            "ConfigName" : "Config2",
-            "Channels" : {
-                "0" : "UR3",
-                "1" : "UR4"
-            },
-            "ScanRate" : 50000,
-            "Measurements" : {
-                "Meas11" : "UR3 - UR4"
-            },
-            "OutputState" : true 
         }
     ],
     "MeasurementControl" : {
-        "MeasConfSwitchTimer" : 5,
-        "MeasConfigOutputsGpio" : [29,31,32,33]
+        "MeasConfSwitchTimer" : 7,
+        "MeasConfigOutputsGpio" : [29,31,36,38]
     }
 }

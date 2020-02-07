@@ -10,35 +10,42 @@ tables = []
 for table in cursor:
     tables.append(table[0])
 
-for table in tables:
+fig,axs = plt.subplots(len(tables), sharex = True, sharey=True)
+firstTable = True
+startTimestamp = 0.0
+startTimestampStr = ""
+for i, table in enumerate(tables):
     c = dbConnection.cursor()
-    result = dbConnection.cursor().execute("SELECT * FROM " + table + " WHERE idx < 1000000 ORDER BY idx ASC")
+    result = dbConnection.cursor().execute("SELECT * FROM " + table + " ORDER BY timestamp ASC")
     x = [] 
     y = []
 
-    firstIteration = True
     for row in result:
-        if firstIteration:
+        if firstTable:
             startTimestamp = row[1]
             startTimestampStr = \
                 datetime.datetime.fromtimestamp(row[1]).isoformat()
-            firstIteration = False
+            firstTable = False
 
         curTimestamp = row[1] - startTimestamp
         x.append(curTimestamp)
         y.append(row[2])
     
+    if(len(y) == 0):
+        print ("table has no data. Skipping this one.")
+        continue
+    
     average = sum(y) / len(y)
     print("Average of " + table + ": " + str(average))
     # plotting the points  
-    plt.plot(x, y) 
+    axs[i].plot(x, y) 
   
-    # naming the x axis 
-    plt.xlabel('Time (s)') 
-    # naming the y axis 
-    plt.ylabel('value (V)') 
+    # # naming the x axis 
+    # axs[i].xlabel('Time (s)') 
+    # # naming the y axis 
+    # axs[i].ylabel('value (V)') 
 
-    plt.title(table + " started at " + startTimestampStr) 
+    # axs[i].title(table + " started at " + startTimestampStr) 
 
-    # function to show the plot 
-    plt.show() 
+# function to show the plot 
+plt.show() 
