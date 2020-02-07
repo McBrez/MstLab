@@ -22,6 +22,7 @@ shows a valid configuration:
 {
     "DatabaseConfig" : {
         "DatabaseName" : "sentinelDb.sl3",
+        "ChangeIntervall" : 100,,
         "WriteIntervall" : 10000
     },
     "MeasurmentConfig" : [
@@ -58,9 +59,14 @@ shows a valid configuration:
 
 * DatabaseConfig
 	Dictionary containing database specific configuration.
-	
+
+* ChangeIntervall
+    The Intervall in write cycles, until the database file gets changed. If set 
+    to 0, database files will not get changed.
+
 * DatabaseName
-	The name of the database file.
+	The base name of the database file, without file ending. The single database
+    files will be named in the format DatabaseName_Timestamp.
 	
 * WriteIntervall
 	Interval in Milliseconds, the script shall write back to the database.

@@ -15,6 +15,7 @@ import sqlite3
 from string import Template
 import time
 import threading
+import datetime
 
 # Project imports
 from SentinelConfig import SentinelConfig
@@ -24,8 +25,7 @@ class DatabaseInterface:
     # Template for query that creates tables for measurements.
     CREATE_QUERY = Template( \
         "CREATE TABLE IF NOT EXISTS $tableName " \
-        "(idx INTEGER PRIMARY KEY,"
-        "timestamp REAL, " \
+        "(timestamp REAL, " \
         "value REAL NOT NULL)" )
 
     # Template for query that inserts measurement values.
@@ -54,10 +54,13 @@ class DatabaseInterface:
             SentinelConfig.JSON_MEASUREMENT_CONFIG)
 
         # Extract configuration data from databaseConfig.
-        self.databaseName = \
+        self.__databaseName = \
             str(self.databaseConfig[SentinelConfig.JSON_DATABASE_NAME])
-        self.storageIntervall = \
+        self.__storageIntervall = \
             int(self.databaseConfig[SentinelConfig.JSON_WRITE_INTERVALL])
+        self.__changeIntervall = \
+            int(self.databaseConfig[SentinelConfig.JSON_DATABASE_CHANGE_INT])
+
         
         # Set up worker thread.
         self.__workerThread = threading.Thread(
@@ -93,6 +96,9 @@ class DatabaseInterface:
 
         # The database interface queue from which data is pushed to this module.
         self.__dbIfQueue = dbIfQueue
+
+        # The counter used for the database file changes.
+        self.__writeCycleCounter = 0
     
     def start(self):
         """
@@ -185,38 +191,31 @@ class DatabaseInterface:
         configuration, and then continuously executes the write back of the 
         value cache to the databse.
         """
-        # Try to establish connection to databse.
-        try:
-            self.dbConnection = sqlite3.connect(self.databaseName)
-        except:
-            self.__connected = False
-            return False
 
-        # Create database structure
-        c = self.dbConnection.cursor()
 
-        # Create a table for each Measurement and MeasurementConfig
-        for measurementConf in self.measurementConfig:
-            measConfigName = \
-                str(measurementConf[SentinelConfig.JSON_MEASUREMENT_NAME])
-            measurements = \
-                measurementConf[SentinelConfig.JSON_MEASUREMENTS]
-
-            # Iterate over measurements.
-            for measurementName in measurements.keys():
-                # Build table name from MeasurementConfig name + Measurement 
-                # name.
-                tableName = measConfigName + "_" + str(measurementName)
-                query = \
-                    DatabaseInterface.CREATE_QUERY.substitute(
-                        tableName = tableName)
-                c.execute(query)
+        dbName = DatabaseInterface.__constructDbName(self.__databaseName)
+        print(dbName)
+        self.__createDbStructure(dbName)
 
         # Enter writeback loop.
         while(self.__runThread):
             # Call __writeback every storageIntervall milliseconds.
-            time.sleep(self.storageIntervall/1000.0)
+            time.sleep(self.__storageIntervall/1000.0)
+
+            # Do writeback.
             self.__writeback()
+
+            # If count of writebacks exceeded configured limit, create new
+            # database file.
+            self.__writeCycleCounter += 1
+            if  self.__writeCycleCounter >= self.__changeIntervall and \
+                self.__changeIntervall != 0:
+
+                self.dbConnection.close()
+                dbName = \
+                    DatabaseInterface.__constructDbName(self.__databaseName)
+                self.__createDbStructure(dbName)
+                self.__writeCycleCounter = 0
         
         # Close database connection, after writeback loop finished.
         self.dbConnection.close()
@@ -242,10 +241,12 @@ class DatabaseInterface:
                 for timestamp, value in valueDict.items():
                     # Do not add comma on first iteration of loop
                     if(firstIteration):
-                        valueListStr += "('" + str(timestamp) + "', " + str(value) + ")"
+                        valueListStr += \
+                            "('" + str(timestamp) + "', " + str(value) + ")"
                         firstIteration = False
                     else:
-                         valueListStr += ",('" + str(timestamp) + "', " + str(value) + ")"
+                         valueListStr += \
+                             ",('" + str(timestamp) + "', " + str(value) + ")"
 
                 insertQuery = \
                     DatabaseInterface.VALUE_INSERT_QUERY.substitute(
@@ -263,3 +264,55 @@ class DatabaseInterface:
                 self.__writeSemaphore.release()
             except:
                 return
+
+    def __createDbStructure(self, dbName):
+        """
+        Creates the database strucutre, with the specified name.
+
+        Parameters:
+        dbName(string): The name of the database.
+        """
+
+         # Try to establish connection to databse.
+        try:
+            self.dbConnection = sqlite3.connect(dbName)
+        except:
+            self.__connected = False
+            return False
+
+        # Create database structure
+        c = self.dbConnection.cursor()
+
+        # Create a table for each Measurement and MeasurementConfig
+        for measurementConf in self.measurementConfig:
+            measConfigName = \
+                str(measurementConf[SentinelConfig.JSON_MEASUREMENT_NAME])
+            measurements = \
+                measurementConf[SentinelConfig.JSON_MEASUREMENTS]
+
+            # Iterate over measurements.
+            for measurementName in measurements.keys():
+                # Build table name from MeasurementConfig name + Measurement 
+                # name.
+                tableName = measConfigName + "_" + str(measurementName)
+                query = \
+                    DatabaseInterface.CREATE_QUERY.substitute(
+                        tableName = tableName)
+                c.execute(query)
+    
+    @staticmethod
+    def __constructDbName(dbNameBase):
+        """
+        Helper function, that constructs a database file name from a base and 
+        an iso timestamp. 
+
+        Parameters:
+        dbNameBase(string): The base name of the database.
+
+        Return:
+        A string in the format <dbNameBase>_<YYYY-MM-DD>T<HH-MM-SS>
+        """
+
+        tempTimestamp = datetime.datetime.now().isoformat().replace(":", "-")
+        timestamp = tempTimestamp.split(".")[0]
+        return dbNameBase + "_" + timestamp + ".sl3"
