@@ -1,6 +1,7 @@
 {
     "DatabaseConfig" : {
-        "DatabaseName" : "sentinelDb.sl3",
+        "DatabaseName" : "sentinelDb",
+        "ChangeIntervall" : 2,
         "WriteIntervall" : 10000
     },
     "MeasurmentConfig" : [
